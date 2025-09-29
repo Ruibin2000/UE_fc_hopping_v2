@@ -1,4 +1,4 @@
-# ===================== train_estimator_multi_npz_all_mse.py (V2-Transformer 稳定版：单层天线维 Transformer, FP32) =====================
+# ===================== train_estimator_multi_npz_all_mse.py Transformer =====================
 from __future__ import annotations
 from dataclasses import dataclass, replace
 from typing import Optional, Tuple, List

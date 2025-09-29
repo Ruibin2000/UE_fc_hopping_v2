@@ -1,4 +1,4 @@
-# ===================== inference_multi_npz_all_mae_mse_cdf.py (Transformer 对齐版) =====================
+# ===================== inference_multi_npz_all_mae_mse_cdf.py =====================
 from __future__ import annotations
 from pathlib import Path
 from typing import List, Optional, Tuple, Dict
