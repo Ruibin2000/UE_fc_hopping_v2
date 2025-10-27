@@ -10,9 +10,11 @@ The estimator [trains](./estimator/train_newNN_V3_mSe_global.py) and evaluate th
 
 
 **Please cite this work as**
+$$
 @article{chen2025transformer,
   title={Transformer-Based Rate Prediction for Multi-Band Cellular Handsets},
   author={Chen, Ruibin and Lei, Haozhe and Guo, Hao and Mezzavilla, Marco and Poddar, Hitesh and Yoshimura, Tomoki and Rangan, Sundeep},
   journal={arXiv preprint arXiv:2509.25722},
   year={2025}
 }
+$$
