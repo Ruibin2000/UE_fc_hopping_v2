@@ -7,3 +7,12 @@ In the ray-tracing part, the UE model configuration file [UE2_config.py](./Ray-t
 Running the [bandit policy](./Ray-tracing%20Simulator/hopping_bandit.py) generates observation masks for the data to produce the estimator input. [Packaging](./Ray-tracing%20Simulator/data2npz.ipynb) the required data as the input dataset.
 
 The estimator [trains](./estimator/train_newNN_V3_mSe_global.py) and evaluate the [model](./estimator/newBandit_multi_0.2_150_5mps_mSe_lr1e-3_W20_V2_tfmr_global.pt) on the shuffled training set and the validation set. Then [test](./estimator/inference_V3_cdfs_mAemSe_5mps.py) on the [testing](./estimator/test_0.2_150_5mps.txt) set. This inference script will draw the instantaneous MSE plot and the CDF of MSE.
+
+
+**Please cite this work as**
+@article{chen2025transformer,
+  title={Transformer-Based Rate Prediction for Multi-Band Cellular Handsets},
+  author={Chen, Ruibin and Lei, Haozhe and Guo, Hao and Mezzavilla, Marco and Poddar, Hitesh and Yoshimura, Tomoki and Rangan, Sundeep},
+  journal={arXiv preprint arXiv:2509.25722},
+  year={2025}
+}
