@@ -1,6 +1,16 @@
+import tensorflow as tf
+
+gpus = tf.config.list_physical_devices("GPU")
+if gpus:
+    print("GPU available:", gpus)
+else:
+    print("No GPU, using CPU")
+
+print()
+
 import os # Configure which GPU
 if os.getenv("CUDA_VISIBLE_DEVICES") is None:
-    gpu_num = 1 # Use "" to use the CPU
+    gpu_num = 0 # Use "" to use the CPU
     os.environ["CUDA_VISIBLE_DEVICES"] = f"{gpu_num}"
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
@@ -76,7 +86,7 @@ class Engine:
         self.region_id_init = 0
         self.region_id = self.region_id_init
         
-        self.R_speed = 1
+        self.R_speed = 2
         self.ue_yaw_init = 0
         self.ue_yaw = self.ue_yaw_init
         self.ue_pitch_init = 0
@@ -295,14 +305,23 @@ class Engine:
             self.ue1.set_location(self.ue_loc)
             self.ue1.set_orientation(self.ue_yaw, self.ue_pitch, 0)
             
+            # paths = self.p_solver(scene=self.scene,
+            #             max_depth=5,
+            #             los=True,
+            #             specular_reflection=True,
+            #             diffuse_reflection=True,
+            #             refraction=True,
+            #             synthetic_array=False,
+            #             seed=41)
+            
             paths = self.p_solver(scene=self.scene,
-                        max_depth=5,
-                        los=True,
-                        specular_reflection=True,
-                        diffuse_reflection=True,
-                        refraction=True,
-                        synthetic_array=False,
-                        seed=41)
+                     max_depth=5,
+                     los=True,
+                     specular_reflection=True,
+                     diffraction=True,
+                     edge_diffraction=False,
+                     refraction=True,
+                     diffuse_reflection=True)
             
             a, tau = paths.cir(normalize_delays=False, out_type="numpy")
             

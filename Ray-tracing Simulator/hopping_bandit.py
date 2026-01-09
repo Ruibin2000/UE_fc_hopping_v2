@@ -15,7 +15,8 @@ import json
 from pathlib import Path
 
 # ----------------- path -----------------
-THIS_DIR = Path(__file__).resolve().parent
+THIS_DIR = Path(__file__).resolve().parent.parent
+print(f"Current directory: {THIS_DIR}")
 
 # ---------------------------
 # Utility helpers
@@ -131,8 +132,8 @@ if __name__ == "__main__":
     mask_folder.mkdir(exist_ok=True, parents=True)
 
 
-    for path_idx in range(41,61):
-        for idx in range(0,50):
+    for path_idx in range(80,81):
+        for idx in range(0,10):
             
             file_obs = "dataset_multi_5mps/newBandit_masked_dataset_0.2_150/51_region_1_" + str(path_idx) + "_"+str(idx)+"_60s_R2_obs.json"
             file_mask = "dataset_multi_5mps/newBandit_masked_dataset_0.2_150/51_region_1_" + str(path_idx) + "_"+str(idx)+"_60s_R2_masks.json"
