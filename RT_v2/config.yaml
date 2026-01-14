@@ -1,0 +1,51 @@
+experiment:
+  name: fc_hopping
+  seed: 42
+
+
+
+tx:
+  n_tx: 2
+  array_size: [[1, 1], [1, 1]]
+  vertical_spacing: [0.5, 0.5]
+  horizontal_spacing: [0.5, 0.5]
+  pos: [[-290.0,50.0,10.0],[52.0,142.0,10.0]]
+  look_at_pos : [[-280.0,100.0,1.0],[52.0, 150.0,1.0]]
+  pattern: ["tr38901","tr38901"]
+  polarization: ["V","V"]
+  display_radius: [20, 20]
+
+  # power_dbm: [51, 51]
+
+
+
+ue:
+  n_ue: 1
+  center_pos: [[-290.0,50.0,100.0], [-290.0,100.0,100.0]] # Initial position of the UE
+  center_orientation: [[0.0,0.0,0.0], [0.0,0.0,0.0]] # Initial orientation of the UE (yaw, pitch, roll)
+  min_speed: 0
+  max_speed: 2
+  body_model: "UE2.ply"
+  body_material: "metal"
+  scaling: [200, 200]  # Scaling factor for the UE model
+
+
+  n_rx: 4
+  rx_id: [0, 1, 2, 3]
+  rx_array_size: [[1, 1], [1, 1], [1, 1], [1, 1]]
+  vertical_spacing: [0.5, 0.5, 0.5, 0.5]
+  horizontal_spacing: [0.5, 0.5, 0.5, 0.5]
+
+  # rx_loc: ["top_left","bottom_right", "center_right", "center_left"]
+  rx_loc_pos: [[-0.036,0.075,0], [0.036,-0.075,0], [0.036,0,0], [-0.036,0,0]] # Relative position of the RXs to the UE center (top_left, bottom_right, center_right, center_left)
+  rx_loc_orientation: [[2.35619449019, 0, 0],[-0.78539816339, 0, 0],[0,0,0],[0,0,0]] # Initial orientation of the RXs (yaw, pitch, roll)
+  rx_pattern: ["patch", "patch", "dipole", "dipole"]
+  # rx_pattern: ["tr38901", "tr38901", "tr38901", "tr38901"]
+  rx_display_radius: [20, 20, 20, 20]
+
+
+  rx_fc: [15.0e9, 15.0e9, 3.5e9, 3.5e9]
+  rx_bw: [200.0e6, 200.0e6, 100.0e6, 100.0e6]
+
+dataset_path:
+  raw: /dataset_multi_5mps/dataset_raw

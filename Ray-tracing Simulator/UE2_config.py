@@ -26,7 +26,7 @@ class UE2:
         self.scene = scene
         self.id = id
 
-        self.center_pos = np.array([0,0,0]) * self.scaling
+        self.center_pos = np.array([0,0,0])
 
         # tr38901
         self.rx1_loc_pos = np.array([-0.036,0.075,0]) * self.scaling
