@@ -44,7 +44,7 @@ class UE_v3:
         self.reset(cfg)
 
     def reset(self, cfg):
-        self.center_pos = cfg["ue"]["center_pos"][self.id]
+        self.center_pos = cfg["ue"]["initial_pos"][self.id]
         # self.center_pos = np.asarray(cfg["ue"]["center_pos"][self.id], dtype=np.float64).reshape(3)
 
         
@@ -56,7 +56,7 @@ class UE_v3:
         
         for index_rx in range(self.n_rx):
             self.rx_loc_pos_list.append(np.array(cfg["ue"]["rx_loc_pos"][index_rx]) * self.scaling)
-            self.rx_loc_oritation_list.append(np.array(cfg["ue"]["rx_loc_orientation"][index_rx]))
+            self.rx_loc_oritation_list.append(np.deg2rad(np.array(cfg["ue"]["rx_loc_orientation_deg"][index_rx])))
             # self.rx_pattern_list.append(cfg["ue"]["rx_pattern"][index_rx])
             
         # Create RXs
@@ -86,7 +86,7 @@ class UE_v3:
                         
     def set_location(self,displacement):
         # Update the position of the object
-        print(self.body.position + displacement)
+        # print(displacement)
         self.body.position = displacement
         self.center_pos = displacement
 
@@ -124,7 +124,7 @@ class UE_v3:
 
     def set_orientation(self, alpha, beta, gamma):
 
-        self.set_location(self.center_pos)
+        # self.set_location(self.center_pos)
 
 
         self.body.orientation = np.array([alpha, beta, gamma])
