@@ -4,7 +4,7 @@ experiment:
 
 
 route:
-  file: ../dataset/route/region_1_80_10s_10mps_list.json
+  file: ../dataset/route/region_1_21_60s_2mps_list.json
 
 channel:
   NF_dB: 7.0
@@ -33,7 +33,7 @@ tx:
 
 ue:
   n_ue: 2
-  initial_pos: [[-290.0,50.0,100.0], [-290.0,100.0,100.0]] # Initial position of the UE
+  initial_pos: [[-290.0,50.0,1.0], [-290.0,100.0,1.0]] # Initial position of the UE
   initial_orientation: [[0.0,0.0], [0.0,0.0]] # Initial orientation of the UE (yaw, pitch)
   min_speed: 0
   max_speed: 2
@@ -57,7 +57,7 @@ ue:
   rx_pattern: ["patch", "patch", "dipole", "dipole"]
   polarization: "V"
   # rx_pattern: ["tr38901", "tr38901", "tr38901", "tr38901"]
-  rx_display_radius: [20, 20, 20, 20]
+  rx_display_radius: [1, 1, 1, 1]
 
 
   rx_fc: [15.0e9, 15.0e9, 3.5e9, 3.5e9]

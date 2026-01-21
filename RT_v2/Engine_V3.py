@@ -313,6 +313,8 @@ class Engine:
         sinr_total = []
         sinr_db_total = []
         
+        capacity_total = []
+        
         # outer loop: update UE positions and orientations
         for index_measure in trange(N_measure):
             
@@ -321,13 +323,15 @@ class Engine:
             
             self.run_RT()
             self.compute_sinr()
+            self.compute_capacity()
             
             hp_total.append(self.hp_lin.tolist())
             sinr_total.append(self.sinr_lin_all_tx.tolist())
             sinr_db_total.append(self.sinr_db_all_tx.tolist())
+            capacity_total.append(self.capacity_all_tx.tolist())
+          
             
-            
-        return hp_total, sinr_db_total
+        return hp_total, sinr_db_total, sinr_total, capacity_total
 
                 
     def run_RT(self):
@@ -467,9 +471,9 @@ class Engine:
             sinr_all_tx = Prx_W / (total - Prx_W + N)
 
             self.sinr_lin_all_tx = sinr_all_tx
-            self.sinr_db_all_tx = 10.0 * np.log10(
-                np.maximum(sinr_all_tx, 1e-300)
-            )
+            self.sinr_db_all_tx = 10.0 * np.log10(np.maximum(sinr_all_tx, 1e-300))
+            
+            
             return
 
         # ----------------------------------
@@ -481,3 +485,23 @@ class Engine:
                 "This is a placeholder for future MIMO extensions."
             )
 
+    def compute_capacity(self):
+
+        sinr_lin_masked = np.where(self.sinr_db_all_tx < -5, 0.0, self.sinr_lin_all_tx)
+        
+        B_rx = np.asarray(self.B_list).reshape(
+            1,            # n_ue
+            -1,           # n_rx
+            1,            # n_rx_array
+            1,            # n_tx
+            1,            # n_tx_array
+            1             # n_t
+        )
+        
+        se = self.alpha * np.log2(1.0 + sinr_lin_masked)
+        se = np.minimum(se, self.rho_max)
+
+        self.capacity_all_tx = B_rx * se / 1e6
+
+
+        # self.capacity_all_tx = self.B_list * np.minimum(self.alpha * np.log2(1 + sinr_lin_masked), self.rho_max) / 1e6
