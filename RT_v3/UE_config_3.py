@@ -17,6 +17,9 @@ import drjit as dr
 import mitsuba as mi
 import gym
 
+from scipy.spatial.transform import Rotation as Rot
+
+
 
 class UE_v3:
     def __init__(self, scene, id_ue, cfg):
@@ -122,16 +125,40 @@ class UE_v3:
         return R
 
 
-    def set_orientation(self, alpha, beta, gamma):
+    # def set_orientation(self, alpha, beta, gamma):
 
-        # self.set_location(self.center_pos)
+    #     # self.set_location(self.center_pos)
 
 
-        self.body.orientation = np.array([alpha, beta, gamma])
-        for index_rx in range(self.n_rx):
-            self.rx_list[index_rx].orientation = self.rx_loc_oritation_list[index_rx] + np.array([alpha, beta, gamma])
-        R = self.R_matrix(alpha, beta, gamma)
+    #     self.body.orientation = np.array([alpha, beta, gamma])
+    #     for index_rx in range(self.n_rx):
+    #         self.rx_list[index_rx].orientation = self.rx_loc_oritation_list[index_rx] + np.array([alpha, beta, gamma])
+    #     R = self.R_matrix(alpha, beta, gamma)
         
 
+    #     for index_rx in range(self.n_rx):
+    #         self.rx_list[index_rx].position = R @ self.rx_loc_pos_list[index_rx] + self.center_pos
+
+    def set_orientation(self, alpha, beta, gamma):
+        # UE 姿态 (ZYX: yaw, pitch, roll)  你这里 gamma 常为 0
+        self.body.orientation = np.array([alpha, beta, gamma])
+
+        # UE 旋转矩阵
+        R_ue = self.R_matrix(alpha, beta, gamma)
+
+        # 位置：只需要 UE 旋转
         for index_rx in range(self.n_rx):
-            self.rx_list[index_rx].position = R @ self.rx_loc_pos_list[index_rx] + self.center_pos
+            self.rx_list[index_rx].position = R_ue @ self.rx_loc_pos_list[index_rx] + self.center_pos
+
+        # 朝向：必须做旋转组合（不能角度相加）
+        for index_rx in range(self.n_rx):
+            yaw_l, pitch_l, roll_l = self.rx_loc_oritation_list[index_rx]  # (yaw,pitch,roll) in rad
+
+            R_local = self.R_matrix(yaw_l, pitch_l, roll_l)
+            R_world = R_ue @ R_local
+
+            # 把 R_world 转回 ZYX 欧拉角（yaw,pitch,roll）
+            eul = Rot.from_matrix(R_world).as_euler("ZYX", degrees=False)
+
+            # eul 顺序就是 (yaw, pitch, roll) 与你 config 对齐
+            self.rx_list[index_rx].orientation = eul

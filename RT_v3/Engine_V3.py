@@ -21,7 +21,7 @@ print()
 # =======================
 import numpy as np
 import matplotlib.pyplot as plt
-from tqdm import trange
+from tqdm import trange, tqdm
 import json
 
 # =======================
@@ -67,32 +67,33 @@ from collections import defaultdict
 class Engine:
             
     ###############################################################################
-    def __init__(self, cfg, scene_file="nyu_tandon"):
+    def __init__(self, cfg, scene):
         
         self.cfg = cfg
         # ------------------------------------------------------------------
         # register custom antenna patterns
         register_antenna_pattern("patch", lambda: Parch_Pattern("V"))
 
-        # ------------------------------------------------------------------
-        # create scene
-        scene_path, map_data = get_scene(scene_file)
-        for k, v in map_data.items():
-            print(f'{k}: {v}')
+        # # ------------------------------------------------------------------
+        # # create scene
+        # scene_path, map_data = get_scene(scene_file)
+        # for k, v in map_data.items():
+        #     print(f'{k}: {v}')
             
-        self.scene = load_scene(scene_path,merge_shapes=True)
+        # self.scene = load_scene(scene_path,merge_shapes=True)
         
-        floor = self.scene.get('ground')
-        # print(f'Floor material: {floor.radio_material.name}')
-        floor.radio_material = ITURadioMaterial("itu_concrete",
-                                        "concrete",
-                                        thickness=0.01,
-                                        color=(0.5, 0.5, 0.5))
+        # floor = self.scene.get('ground')
+        # # print(f'Floor material: {floor.radio_material.name}')
+        # floor.radio_material = ITURadioMaterial("itu_concrete",
+        #                                 "concrete",
+        #                                 thickness=0.01,
+        #                                 color=(0.5, 0.5, 0.5))
 
-        self.scene.remove("itu_wet_ground")
+        # self.scene.remove("itu_wet_ground")
 
-        for name, obj in self.scene.objects.items():
-            print(f'{name:<15}{obj.radio_material.name}')
+        # for name, obj in self.scene.objects.items():
+        #     print(f'{name:<15}{obj.radio_material.name}')
+        self.scene = scene
             
             
         # ------------------------------------------------------------------
@@ -160,9 +161,9 @@ class Engine:
         # ------------------------------------------------------------------
         # UE initial positions and orientations
         self.R_speed_level = cfg["ue"]["R_speed_level"]
-        self.ue_yaw_init_list = np.array(cfg["ue"]["initial_orientation"])[:,0]
+        self.ue_yaw_init_list = np.deg2rad(np.array(cfg["ue"]["initial_orientation_deg"])[:,0])
         # self.ue_yaw_list = self.ue_yaw_init_list.copy()
-        self.ue_pitch_init_list = np.array(cfg["ue"]["initial_orientation"])[:,1]
+        self.ue_pitch_init_list = np.deg2rad(np.array(cfg["ue"]["initial_orientation_deg"])[:,1])
         # self.ue_pitch_list = self.ue_pitch_init_list.copy()
         # self.ue_loc_init_list = np.array(cfg["ue"]["initial_pos"])
         # self.ue_loc_list = self.ue_loc_init_list.copy()
@@ -177,6 +178,13 @@ class Engine:
             
         # ------------------------------------------------------------------
         # initialize data record
+        
+    def set_ue_orientation(self, angles):
+        
+        self.ue_yaw_init_list = np.deg2rad(np.array(angles)[:,0])
+        self.ue_pitch_init_list = np.deg2rad(np.array(angles)[:,1])
+        
+        self.reset()
         
     # ###############################################################################      
     def update_orientation(self, t):
@@ -333,6 +341,98 @@ class Engine:
             
         return hp_total, sinr_db_total, sinr_total, capacity_total
 
+    
+    # def run_capacity_map(self, coords_array):
+        
+    #     x_dim, y_dim, _ = coords_array.shape    
+        
+    #     capacity_map = np.zeros((x_dim, y_dim, self.cfg["tx"]["n_tx"], self.cfg["ue"]["n_rx"]))
+        
+      
+    #     pbar = tqdm(total=x_dim * y_dim, desc="Scanning grid", unit="pt")
+    #     for idx_x in range(x_dim):
+    #         for idx_y in range(y_dim):
+    #             self.ue_loc_list = [coords_array[idx_x, idx_y, :].tolist()]
+
+
+    #             self.run_RT()
+    #             self.compute_sinr()
+    #             self.compute_capacity()
+    #             capacity_map[idx_x, idx_y] = self.capacity_all_tx.reshape(self.cfg["tx"]["n_tx"], self.cfg["ue"]["n_rx"])
+
+    #             pbar.update(1)
+    #     pbar.close()
+                
+    #     return capacity_map
+    
+    def run_capacity_map(self, coords_array):
+
+        x_dim, y_dim, _ = coords_array.shape    
+        n_tx = self.cfg["tx"]["n_tx"]
+        n_rx = self.cfg["ue"]["n_rx"]
+
+        capacity_map = np.zeros((x_dim, y_dim, n_tx, n_rx), dtype=float)
+
+        pbar = tqdm(total=x_dim * y_dim, desc="Scanning grid", unit="pt")
+        for idx_x in range(x_dim):
+            for idx_y in range(y_dim):
+                self.ue_loc_list = [coords_array[idx_x, idx_y, :].tolist()]
+
+                self.run_RT()
+                self.compute_sinr()
+                self.compute_capacity()
+
+                # capacity_all_tx shape: (n_ue, n_rx, 1, n_tx, 1, 1)
+                cap = self.capacity_all_tx[0, :, 0, :, 0, 0]   # (n_rx, n_tx)
+                capacity_map[idx_x, idx_y, :, :] = cap.T       # (n_tx, n_rx)
+
+                pbar.update(1)
+
+        pbar.close()
+        return capacity_map
+
+    
+    
+    def run_rotation_map(self, step_size):
+        
+        self.ue_loc_list = self.cfg["ue"]["initial_pos"]
+        
+        yaw_deg_list = list(range(-180, 181, step_size))
+        yaw_rad_list = np.deg2rad(np.array(yaw_deg_list)).tolist()
+        x_dim = len(yaw_deg_list)
+        
+        
+        pitch_deg_list = list(range(-90, 91, 10))
+        pitch_rad_list = np.deg2rad(np.array(pitch_deg_list)).tolist()
+        y_dim = len(pitch_deg_list)
+        
+        rotation_sinr_map = np.zeros((x_dim, y_dim, self.cfg["ue"]["n_rx"]))
+        
+        pbar = tqdm(total=x_dim * y_dim, desc="Scanning grid", unit="pt")
+        for idx_x in range(x_dim):
+            for idx_y in range(y_dim):
+                
+                
+                for index_ue in range(self.n_ue):
+                    
+                    self.ue_yaw_list[index_ue] = yaw_rad_list[idx_x]
+                    self.ue_pitch_list[index_ue] = pitch_rad_list[idx_y]
+                    
+                self.run_RT()
+                self.compute_sinr()
+
+                
+                
+                
+                rotation_sinr_map[idx_x, idx_y] = self.sinr_db_all_tx.reshape(self.cfg["ue"]["n_rx"],)
+
+                pbar.update(1)
+        pbar.close()
+        
+        return rotation_sinr_map
+
+
+
                 
     def run_RT(self):
         a_list = []
@@ -458,7 +558,7 @@ class Engine:
 
             # Received power per link
             # hp: (U,R,1,T,1,Time)
-            Prx_W = hp * Ptx_W[None, None, None, :, None, None]
+            Prx_W = hp * Ptx_W[None, None, None, :self.n_tx, None, None]
 
             # Noise per RX
             N_W = self.noise_w_per_rx()                      # (R,)
