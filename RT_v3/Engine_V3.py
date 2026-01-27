@@ -402,7 +402,7 @@ class Engine:
         x_dim = len(yaw_deg_list)
         
         
-        pitch_deg_list = list(range(-90, 91, 10))
+        pitch_deg_list = list(range(-90, 91, step_size))
         pitch_rad_list = np.deg2rad(np.array(pitch_deg_list)).tolist()
         y_dim = len(pitch_deg_list)
         
