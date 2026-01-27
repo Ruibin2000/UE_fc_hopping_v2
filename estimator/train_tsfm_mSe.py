@@ -14,6 +14,8 @@ from tqdm import trange, tqdm
 
 THIS_DIR = Path(__file__).resolve().parent
 
+mobility = "10mps"
+
 # ----------------- User config -----------------
 USER_CFG = dict(
     # 训练超参
@@ -29,10 +31,10 @@ USER_CFG = dict(
     seed=2025,
 
 
-    data_dir=str(THIS_DIR / "dataset" / "newBandit_npz_0.2_150_10mps"),
+    data_dir=str(THIS_DIR / "dataset" / "newBandit_npz_0.2_150_") +mobility,
     pattern_prefix="bandit_1_",
-    pattern_suffix="_10mps.npz",
-    test_file_path="test_0.2_150_10mps.txt",
+    pattern_suffix="_" +mobility+ ".npz",
+    test_file_path="test_0.2_150_" +mobility+ ".txt",
 
     # cap
     cap_vec=(960.0, 960.0, 480.0, 480.0),
@@ -50,7 +52,7 @@ USER_CFG = dict(
     ffn_mult=4,              # FFN extend factor
 
     num_workers=4,
-    ckpt=str(THIS_DIR / "newBandit_multi_0.2_150_10mps_mSe_lr1e-3_W20_V2_tfmr_global_batch_512.pt"),
+    ckpt=str(THIS_DIR / "newBandit_multi_0.2_150_") +mobility+ "_tsfm_mSe_lr1e-3_W20_batch_512.pt",
     device=f"cuda:{0}" if torch.cuda.is_available() else "cpu",
 )
 
