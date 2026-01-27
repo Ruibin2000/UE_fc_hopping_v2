@@ -16,7 +16,7 @@ measure_time = 0.05
 
 
 USER_CFG = dict(
-    ckpt=str(THIS_DIR / "newBandit_multi_0.2_150_5mps_mSe_lr1e-3_W20_V2_tfmr_global.pt"),
+    ckpt=str(THIS_DIR / "newBandit_multi_0.2_150_5mps_mSe_lr1e-3_W20_V2_tfmr_global_ba.pt"),
     test_list=str(THIS_DIR / "test_0.2_150_5mps.txt"),
     batch_size=512,
     device=f"cuda:{2}" if torch.cuda.is_available() else "cpu",

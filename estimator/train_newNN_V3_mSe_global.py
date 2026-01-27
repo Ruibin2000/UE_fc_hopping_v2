@@ -1,6 +1,7 @@
 # ===================== train_estimator_multi_npz_all_mse.py Transformer =====================
 from __future__ import annotations
 from dataclasses import dataclass, replace
+import os
 from typing import Optional, Tuple, List
 from pathlib import Path
 import random, argparse
@@ -19,7 +20,7 @@ USER_CFG = dict(
     epochs=200,
     W=20,
     H=1,
-    batch_size=128,
+    batch_size=512,
     lr=1e-3,                
     weight_decay=0.0,
     hidden=32,               
@@ -48,9 +49,9 @@ USER_CFG = dict(
     use_ant_id=True,         # whether antenna ID embedding
     ffn_mult=4,              # FFN extend factor
 
-    num_workers=2,
-    ckpt=str(THIS_DIR / "newBandit_multi_0.2_150_10mps_mSe_lr1e-3_W20_V2_tfmr_global.pt"),
-    device=f"cuda:{2}" if torch.cuda.is_available() else "cpu",
+    num_workers=4,
+    ckpt=str(THIS_DIR / "newBandit_multi_0.2_150_10mps_mSe_lr1e-3_W20_V2_tfmr_global_batch_512.pt"),
+    device=f"cuda:{0}" if torch.cuda.is_available() else "cpu",
 )
 
 # ----------------- command line -----------------
@@ -508,6 +509,17 @@ def main():
 
     cfg = TrainCfg()
     cfg = apply_overrides(cfg, USER_CFG)
+    
+    
+    print("[DEVICE] cfg.device =", cfg.device)
+    print("[DEVICE] torch.cuda.is_available =", torch.cuda.is_available())
+    print("[DEVICE] torch.cuda.device_count =", torch.cuda.device_count())
+    if torch.cuda.is_available():
+        print("[DEVICE] CUDA_VISIBLE_DEVICES =", os.environ.get("CUDA_VISIBLE_DEVICES"))
+        cur = torch.cuda.current_device()
+        print("[DEVICE] current_device =", cur)
+        print("[DEVICE] device_name =", torch.cuda.get_device_name(cur))
+
 
     set_seed(cfg.seed)
 
