@@ -11,9 +11,9 @@ THIS_DIR = Path(__file__).resolve().parent
 
 mobility = "10mps"
 USER_CFG = dict(
-    ckpt=str(THIS_DIR / "newBandit_multi_0.2_150_") +mobility+ str("_GRU_mSe_lr1e-3_W20_batch_512.pt"),
+    ckpt=str(THIS_DIR / "newBandit_multi_0.2_150_") +mobility+ str("_GRU_mSe_lr1e-4_W20_batch_512.pt"),
     test_list=str(THIS_DIR / "test_0.2_150_") +mobility+ ".txt",
-    out_dir=str(THIS_DIR / "pred_json_GRU"),
+    out_dir=str(THIS_DIR / "pred_json_GRU_lr1e-4"),
     batch_size=512,
     device="cuda:0" if torch.cuda.is_available() else "cpu",
     W=None,

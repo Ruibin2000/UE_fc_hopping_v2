@@ -9,15 +9,15 @@ THIS_DIR = Path(__file__).resolve().parent
 
 USER_CFG = dict(
     test_list=str(THIS_DIR / "test_0.2_150_10mps.txt"),
-    pred_dir_tfmr=str(THIS_DIR / "pred_json_tfmr"),
-    pred_dir_lstm=str(THIS_DIR / "pred_json_lstm"),
-    pred_dir_gru=str(THIS_DIR / "pred_json_gru"),
-    out_dir=str(THIS_DIR / "figs_compare"),
-    # xlim=None,        # "0,200000"
-    xlim = "1000,200000", 
+    pred_dir_tfmr=str(THIS_DIR / "pred_json_tfmr_lr1e-3"),
+    pred_dir_lstm=str(THIS_DIR / "pred_json_LSTM_lr1e-3"),
+    pred_dir_gru=str(THIS_DIR / "pred_json_GRU_lr1e-3"),
+    out_dir=str(THIS_DIR / "figs_compare_lr1e-3"),
+    xlim=None,        # "0,200000"
+    # xlim = "1000,200000", 
     # xscale="linear",          # "linear" | "log"
-    xscale="log",          # "linear" | "log"
-    include_baselines=0,      # 1: Full prev + Masked prev
+    xscale="linear",          # "linear" | "log"
+    include_baselines=1,      # 1: Full prev + Masked prev
     models="tfmr,lstm,gru",   # comma list subset
     strict=0,
 )
@@ -250,13 +250,13 @@ def main():
 
         print(" mean MSE: ".join([msg_parts[0], ", ".join(msg_parts[1:])]))
 
-        # plot_cdf(
-        #     series=series,
-        #     save_path=out_dir / f"{stem}_CDF_MSE.png",
-        #     title=f"{npz_path.name} — CDF of per-time MSE",
-        #     xlim=xlim,
-        #     xscale=xscale,
-        # )
+        plot_cdf(
+            series=series,
+            save_path=out_dir / f"{stem}_CDF_MSE.png",
+            title=f"{npz_path.name} — CDF of per-time MSE",
+            xlim=xlim,
+            xscale=xscale,
+        )
 
     # ALL
     if include_baselines and len(all_mse_full) == 0 and (len(all_mse_tfmr)+len(all_mse_lstm)+len(all_mse_gru) == 0):

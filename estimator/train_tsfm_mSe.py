@@ -23,7 +23,7 @@ USER_CFG = dict(
     W=20,
     H=1,
     batch_size=512,
-    lr=1e-3,                
+    lr=1e-4,                
     weight_decay=0.0,
     hidden=32,               
     z_dim=128,            
@@ -52,7 +52,7 @@ USER_CFG = dict(
     ffn_mult=4,              # FFN extend factor
 
     num_workers=4,
-    ckpt=str(THIS_DIR / "newBandit_multi_0.2_150_") +mobility+ "_tsfm_mSe_lr1e-3_W20_batch_512.pt",
+    ckpt=str(THIS_DIR / "newBandit_multi_0.2_150_") +mobility+ "_tsfm_mSe_lr1e-4_W20_batch_512.pt",
     device=f"cuda:{0}" if torch.cuda.is_available() else "cpu",
 )
 
