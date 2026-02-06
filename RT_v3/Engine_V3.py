@@ -160,7 +160,7 @@ class Engine:
             
         # ------------------------------------------------------------------
         # UE initial positions and orientations
-        self.R_speed_level = cfg["ue"]["R_speed_level"]
+        self.R_speed_level = cfg["motion"]["R_speed_level"]
         self.ue_yaw_init_list = np.deg2rad(np.array(cfg["ue"]["initial_orientation_deg"])[:,0])
         # self.ue_yaw_list = self.ue_yaw_init_list.copy()
         self.ue_pitch_init_list = np.deg2rad(np.array(cfg["ue"]["initial_orientation_deg"])[:,1])
@@ -300,46 +300,90 @@ class Engine:
 
         return out
 
-
-
-    
-    ###############################################################################
-    # run from file
+    # ###############################################################################
+    # # run from file
     def run_from_file(self, routes_file):
-        
-        with open(routes_file, 'r') as f:
-            loaded_routes = json.load(f)
-            
-        loaded_routes = np.array(loaded_routes)
-            
-            
-        N_measure = loaded_routes.shape[1]
-        
+
+        data = np.load(routes_file)
+
+        positions = data["positions"].astype(np.float32)   # (n_ue, n_step, 3)
+        rotations = data["rotations"].astype(np.float32)   # (n_ue, n_step, 3)
+
+        if positions.shape[:2] != rotations.shape[:2] or positions.shape[-1] != 3 or rotations.shape[-1] != 3:
+            raise ValueError(f"Bad shapes: positions={positions.shape}, rotations={rotations.shape}")
+
+        n_ue, N_measure, _ = positions.shape
+        if n_ue != self.n_ue:
+            raise ValueError(f"routes n_ue={n_ue} != engine self.n_ue={self.n_ue}")
+
+        # --- optional: auto-detect degrees vs radians ---
+        # 如果绝对值经常 > 2*pi，基本就是度
+        if np.nanmax(np.abs(rotations[..., 0])) > 2*np.pi + 1e-3 or np.nanmax(np.abs(rotations[..., 1])) > np.pi + 1e-3:
+            rotations = np.deg2rad(rotations)
+
         self.reset()
-        
-        hp_total = []
-        sinr_total = []
-        sinr_db_total = []
-        
-        capacity_total = []
-        
-        # outer loop: update UE positions and orientations
-        for index_measure in trange(N_measure):
-            
-            self.ue_loc_list = loaded_routes[:,index_measure,:].tolist()
-            self.update_orientation(self.measure_time)
-            
+
+        hp_total, sinr_total, sinr_db_total, capacity_total = [], [], [], []
+
+        for k in trange(N_measure):
+
+            self.ue_loc_list = positions[:, k, :].tolist()
+
+            # ✅ update yaw/pitch lists (what run_RT uses)
+            self.ue_yaw_list   = rotations[:, k, 0].copy()
+            self.ue_pitch_list = rotations[:, k, 1].copy()
+
             self.run_RT()
             self.compute_sinr()
             self.compute_capacity()
-            
+
             hp_total.append(self.hp_lin.tolist())
             sinr_total.append(self.sinr_lin_all_tx.tolist())
             sinr_db_total.append(self.sinr_db_all_tx.tolist())
             capacity_total.append(self.capacity_all_tx.tolist())
+
+        return hp_total, sinr_db_total, sinr_total, capacity_total
+
+
+
+    
+    # ###############################################################################
+    # # run from file
+    # def run_from_file(self, routes_file):
+        
+    #     with open(routes_file, 'r') as f:
+    #         loaded_routes = json.load(f)
+            
+    #     loaded_routes = np.array(loaded_routes)
+            
+            
+    #     N_measure = loaded_routes.shape[1]
+        
+    #     self.reset()
+        
+    #     hp_total = []
+    #     sinr_total = []
+    #     sinr_db_total = []
+        
+    #     capacity_total = []
+        
+    #     # outer loop: update UE positions and orientations
+    #     for index_measure in trange(N_measure):
+            
+    #         self.ue_loc_list = loaded_routes[:,index_measure,:].tolist()
+    #         self.update_orientation(self.measure_time)
+            
+    #         self.run_RT()
+    #         self.compute_sinr()
+    #         self.compute_capacity()
+            
+    #         hp_total.append(self.hp_lin.tolist())
+    #         sinr_total.append(self.sinr_lin_all_tx.tolist())
+    #         sinr_db_total.append(self.sinr_db_all_tx.tolist())
+    #         capacity_total.append(self.capacity_all_tx.tolist())
           
             
-        return hp_total, sinr_db_total, sinr_total, capacity_total
+    #     return hp_total, sinr_db_total, sinr_total, capacity_total
 
     
     # def run_capacity_map(self, coords_array):

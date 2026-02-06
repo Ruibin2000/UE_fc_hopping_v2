@@ -4,7 +4,12 @@ experiment:
 
 
 route:
-  file: ../dataset/route/region_1_21_60s_2mps_list.json
+  # file: ../dataset/route/region_1_21_60s_2mps_list.json
+  # folder: "../dataset/route_Mobility_high_region_1"
+  folder: "../dataset/route_Mobility_medium_region_1"
+  # folder: "../dataset/test"
+  # folder: "../dataset/route_Mobility_low_region_1"
+  n_routes: 1
 
 channel:
   NF_dB: 7.0
@@ -15,6 +20,64 @@ channel:
   rand_seed: 20250920
 
   case: "SISO"
+
+# ##############################################
+# # low mobility
+# ##############################################
+# motion:
+#   measure_period: 0.05  # in seconds
+#   measure_time: 60.0  # in seconds
+#   max_speed: 2.0
+#   min_speed: 0.0
+#   dv_min: -1.0
+#   dv_max: 1.0
+#   dphi_min: -45.0
+#   dphi_max: 45.0
+
+#   v_intial: 1.0
+#   R_speed_level: 1
+
+#   rand_seed: 42
+
+###############################################
+# medium mobility
+###############################################
+motion:
+  measure_period: 0.05  # in seconds
+  measure_time: 10.0  # in seconds
+  max_speed: 5.0
+  min_speed: 0.0
+  dv_min: -2.0
+  dv_max: 2.0
+  dphi_min: -30.0
+  dphi_max: 30.0
+
+  v_intial: 2.0
+  R_speed_level: 1.5
+
+  rand_seed: 42
+
+# ###############################################
+# # high mobility
+# ###############################################
+# motion:
+#   measure_period: 0.05  # in seconds
+#   measure_time: 60.0  # in seconds
+#   max_speed: 10.0
+#   min_speed: 0.0
+#   dv_min: -5.0
+#   dv_max: 5.0
+#   dphi_min: -20.0
+#   dphi_max: 20.0
+
+#   v_intial: 3.0
+#   R_speed_level: 2
+
+#   rand_seed: 42
+
+  # region 1
+  region: [[-467.028, 105.999, 1], [-339.867, 105.999, 1],[-467.028, -170.559, 1], [-339.867, -170.559, 1]]
+
 
 tx:
   n_tx: 2
@@ -42,16 +105,14 @@ ue:
   initial_pos: [[0,0.0,0.0], [0.0,0,0.0]] # Initial position of the UE
   # initial_orientation: [[0.0,0.0], [0.0,0.0]] # Initial orientation of the UE (yaw, pitch)
   initial_orientation_deg: [[0.0,0.0], [0.0,0.0]]
-
+  # initial_speed: [1.0, 1.0]  # Initial speed of the UE in m/s
 
   
-  min_speed: 0
-  max_speed: 2
+
   body_model: "UE2.ply"
   body_material: "metal"
   scaling: [1, 1]  # Scaling factor for the UE model
 
-  R_speed_level: 1 
 
 
   n_rx: 4
