@@ -15,7 +15,7 @@ route:
   # folder: "../dataset/test"
   # folder: "../dataset/route_Mobility_low_region_1"
 
-  folder: "../dataset/route_Mobility_medium_region_2"
+  folder: "../dataset/route/route_Mobility_medium_region_2"
   n_routes: 1000
 
 channel:
@@ -51,7 +51,7 @@ channel:
 ###############################################
 motion:
   measure_period: 0.05  # in seconds
-  measure_time: 10.0  # in seconds
+  measure_time: 60.0  # in seconds
   max_speed: 5.0
   min_speed: 0.0
   dv_min: -2.0
@@ -83,8 +83,10 @@ motion:
 #   rand_seed: 42
 
   # region 1
-  # region: [[-467.028, 105.999, 1], [-339.867, 105.999, 1],[-467.028, -170.559, 1], [-339.867, -170.559, 1]]
-  region: [[],[],[],[]]
+  # region: [[-467.028, 105.999, 1], [-339.867, 105.999, 1], [-467.028, -170.559, 1], [-339.867, -170.559, 1]]
+
+  # region 2
+  region: [[-286.686, 146.815, 1], [-286.686, 301.179, 1], [-108.376,146.815, 1], [-108.376, 301.179, 1]]
 
 
 tx:

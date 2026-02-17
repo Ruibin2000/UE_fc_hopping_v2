@@ -24,6 +24,7 @@ venv/
 # =========================
 dataset/CQI_Mobility_low_region_1
 dataset/route/
+dataset/
 
 # =========================
 # Logs
