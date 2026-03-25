@@ -15,7 +15,6 @@ import numpy as np
 
 import drjit as dr
 import mitsuba as mi
-import gym
 
 from scipy.spatial.transform import Rotation as Rot
 
@@ -32,17 +31,20 @@ class UE_v3:
                                         cfg["ue"]["body_material"],
                                         thickness=0.1,
                                         color=(0.8, 0, 0))
+
+        self.add_body = cfg["ue"]["add_body"]
         
+        if self.add_body:
+            # Create a new object with the given parameters
+            self.body = SceneObject(fname=cfg["ue"]["body_model"],
+                                name=f"ue-{self.id}",
+                                radio_material=self.ue_material)
+            
+            
+            self.scene.remove(f"ue-{self.id}")
+            self.scene.edit(add = self.body)
+            self.body.scaling = self.scaling
         
-        # Create a new object with the given parameters
-        self.body = SceneObject(fname=cfg["ue"]["body_model"],
-                               name=f"ue-{self.id}",
-                               radio_material=self.ue_material)
-        
-        
-        self.scene.remove(f"ue-{self.id}")
-        self.scene.edit(add = self.body)
-        self.body.scaling = self.scaling
 
         self.reset(cfg)
 
@@ -79,8 +81,8 @@ class UE_v3:
         # Reset the position and orientation of the object
         self.set_location(self.center_pos)
         
-
-        self.body.orientation = np.array([0, 0, 0])
+        if self.add_body:
+            self.body.orientation = np.array([0, 0, 0])
 
         for index_rx in range(self.n_rx):
             self.rx_list[index_rx].orientation = self.rx_loc_oritation_list[index_rx]
@@ -90,7 +92,8 @@ class UE_v3:
     def set_location(self,displacement):
         # Update the position of the object
         # print(displacement)
-        self.body.position = displacement
+        if self.add_body:
+            self.body.position = displacement
         self.center_pos = displacement
 
         for index_rx in range(self.n_rx):
@@ -141,7 +144,8 @@ class UE_v3:
 
     def set_orientation(self, alpha, beta, gamma):
         # UE 姿态 (ZYX: yaw, pitch, roll)  你这里 gamma 常为 0
-        self.body.orientation = np.array([alpha, beta, gamma])
+        if self.add_body:
+            self.body.orientation = np.array([alpha, beta, gamma])
 
         # UE 旋转矩阵
         R_ue = self.R_matrix(alpha, beta, gamma)

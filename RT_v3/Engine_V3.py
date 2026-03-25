@@ -1,20 +1,20 @@
 # =======================
 # TensorFlow / GPU setup
 # =======================
-import os
+# import os
 
-os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")  # 用 GPU 0；设为 "" 用 CPU
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+# os.environ.setdefault("CUDA_VISIBLE_DEVICES", "0")  # 用 GPU 0；设为 "" 用 CPU
+# os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import tensorflow as tf
 
-gpus = tf.config.list_physical_devices("GPU")
-if gpus:
-    print("GPU available:", gpus)
-else:
-    print("No GPU, using CPU")
+# gpus = tf.config.list_physical_devices("GPU")
+# if gpus:
+#     print("GPU available:", gpus)
+# else:
+#     print("No GPU, using CPU")
 
-print()
+# print()
 
 # =======================
 # Core scientific stack

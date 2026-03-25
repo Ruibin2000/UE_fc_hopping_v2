@@ -2,26 +2,9 @@ experiment:
   name: fc_hopping
   seed: 42
 
-  CQI_dir: "../dataset/CQI_Mobility_medium_region_2_test"
-
-  # CQI_dir: "../dataset/CQI_Mobility_medium_region_1"
-  # CQI_dir: "../dataset/CQI_Mobility_low_region_1"
-  # CQI_dir: "../dataset/CQI_test"
-
-scene:
-  name: "free_space"
 
 route:
-  # file: ../dataset/route/region_1_21_60s_2mps_list.json
-  # folder: "../dataset/route_Mobility_high_region_1"
-  # folder: "../dataset/route_Mobility_medium_region_1"
-  # folder: "../dataset/test"
-  # folder: "../dataset/route_Mobility_low_region_1"
-
-  # folder: "../dataset/route/route_Mobility_medium_region_2"
-
-  folder: "../dataset/route/route_Mobility_medium_region_2_compare"
-  n_routes: 10
+  file: ../dataset/route/region_1_21_60s_2mps_list.json
 
 channel:
   NF_dB: 7.0
@@ -33,23 +16,24 @@ channel:
 
   case: "SISO"
 
-# ##############################################
-# # low mobility
-# ##############################################
-# motion:
-#   measure_period: 0.05  # in seconds
-#   measure_time: 60.0  # in seconds
-#   max_speed: 2.0
-#   min_speed: 0.0
-#   dv_min: -1.0
-#   dv_max: 1.0
-#   dphi_min: -45.0
-#   dphi_max: 45.0
+tx:
+  n_tx: 1
+  array_size: [1, 1]
+  vertical_spacing: 0.5
+  horizontal_spacing: 0.5
+  # pos: [[-290.0,50.0,10.0],[52.0,142.0,10.0]]
 
-#   v_intial: 1.0
-#   R_speed_level: 1
 
-#   rand_seed: 42
+  pos: [[0, 0, 0]]
+  look_at_pos : [[0, 5.0,0.0]]
+
+
+
+  pattern: "tr38901"
+  polarization: "V"
+  display_radius: 20
+
+  power_dbm: [51]
 
 ###############################################
 # medium mobility
@@ -95,40 +79,22 @@ motion:
   collision_margin: 0.3
 
 
-tx:
-  n_tx: 2
-  array_size: [1, 1]
-  vertical_spacing: 0.5
-  horizontal_spacing: 0.5
-  # pos: [[-290.0,50.0,10.0],[52.0,142.0,10.0]]
-
-
-  pos: [[-265.881, 43.638, 10],[52.0,142.0,10.0]]
-  look_at_pos : [[-265.881,100.0,1.0],[52.0, 150.0,1.0]]
-
-
-
-  pattern: "tr38901"
-  polarization: "V"
-  display_radius: 20
-
-  power_dbm: [51, 51]
-
-
 
 ue:
   n_ue: 1
-  initial_pos: [[0,0.0,0.0], [0.0,0,0.0]] # Initial position of the UE
-  # initial_orientation: [[0.0,0.0], [0.0,0.0]] # Initial orientation of the UE (yaw, pitch)
-  initial_orientation_deg: [[0.0,0.0], [0.0,0.0]]
-  # initial_speed: [1.0, 1.0]  # Initial speed of the UE in m/s
+  initial_pos: [[0, 500.0,0.0]] # Initial position of the UE
 
+  initial_orientation_deg: [[0.0,0.0]]
+
+  add_body: False  # Whether to add a body model to the UE
   
-  add_body: True  # Whether to add a body model to the UE
+  min_speed: 0
+  max_speed: 2
   body_model: "UE2.ply"
   body_material: "metal"
-  scaling: [1, 1]  # Scaling factor for the UE model
+  scaling: [1]  # Scaling factor for the UE model
 
+  R_speed_level: 1 
 
 
   n_rx: 4
@@ -139,8 +105,10 @@ ue:
 
   # rx_loc: ["top_left","bottom_right", "center_right", "center_left"]
   rx_loc_pos: [[-0.036,0.076,0], [0.036,-0.076,0], [0.036,0,0], [-0.036,0,0]] # Relative position of the RXs to the UE center (top_left, bottom_right, center_right, center_left)
+
   # rx_loc_orientation: [[2.35619449019, 0, 0],[-0.78539816339, 0, 0],[0,0,0],[0,0,0]] # Initial orientation of the RXs (yaw, pitch, roll)
-  rx_loc_orientation_deg: [[135, 0, 0],[-45, 0, 0],[0,0,0],[0,0,0]] # Initial orientation of the RXs (yaw, pitch, roll) in degrees
+  rx_loc_orientation_deg: [[135, 0, 0],[45, 0, 0],[0,0,0],[0,0,0]] # Initial orientation of the RXs (yaw, pitch, roll) in degrees
+
   rx_pattern: ["patch", "patch", "dipole", "dipole"]
   polarization: "V"
   # rx_pattern: ["tr38901", "tr38901", "tr38901", "tr38901"]
