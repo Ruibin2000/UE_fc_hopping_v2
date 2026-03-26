@@ -26,6 +26,9 @@ dataset/CQI_Mobility_low_region_1
 dataset/route/
 dataset/
 
+benchmark_epsilon_greedy/plots
+benchmark_epsilon_greedy/selection_results
+
 # =========================
 # Logs
 # =========================
