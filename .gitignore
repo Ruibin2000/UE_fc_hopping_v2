@@ -26,8 +26,10 @@ dataset/CQI_Mobility_low_region_1
 dataset/route/
 dataset/
 
-benchmark_epsilon_greedy/plots
-benchmark_epsilon_greedy/selection_results
+benchmark/benchmark_epsilon_greedy/epsilon_per_route/plots
+benchmark/benchmark_epsilon_greedy/epsilon_per_route/epsilon_greedy_single_ue
+benchmark/benchmark_epsilon_greedy/temp
+benchmark/benchmark_bandit/temp
 
 # =========================
 # Logs

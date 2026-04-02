@@ -1,42 +1,33 @@
 #!/usr/bin/env python3
 # route_gen_clean.py
 #
-# Clean version:
+# Logging version:
 # - Fixes CUDA_VISIBLE_DEVICES issue (must set before importing TensorFlow)
-# - Keeps your Mitsuba inside-building test
+# - Keeps Mitsuba inside-building test
 # - Adds max_attempts_per_step to prevent infinite rejection loops
-# - If all attempts fail at a step: TURN AROUND IN PLACE (yaw += pi), no re-init, no step-forcing
-
+# - If all attempts fail at a step: TURN AROUND IN PLACE (yaw += pi)
+# - Uses logging instead of print
+# - Writes logs to ./logs/route_log_YYYYMMDD_HHMMSS.log
 
 # =====================
 # TensorFlow / GPU
 # =====================
 import os
-# import tensorflow as tf
 
 if os.getenv("CUDA_VISIBLE_DEVICES") is None:
     gpu_num = 0  # 使用 CPU 可设为 ""
     os.environ["CUDA_VISIBLE_DEVICES"] = f"{gpu_num}"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
-    
+
 import tensorflow as tf
-
-gpus = tf.config.list_physical_devices("GPU")
-if gpus:
-    print("GPU available:", gpus)
-else:
-    print("No GPU, using CPU")
-
-# if os.getenv("CUDA_VISIBLE_DEVICES") is None:
-#     gpu_num = 0  # 使用 CPU 可设为 ""
-#     os.environ["CUDA_VISIBLE_DEVICES"] = f"{gpu_num}"
-
-# os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 # ============================================================
 # 1) Imports
 # ============================================================
 import json
+import logging
+import time
+from datetime import datetime
 from pathlib import Path
 
 import numpy as np
@@ -44,8 +35,6 @@ import yaml
 import gymnasium as gym
 
 from tqdm import tqdm
-
-import tensorflow as tf  # after env vars are set
 
 import mitsuba as mi
 import drjit as dr
@@ -59,13 +48,55 @@ from sionnautils.custom_scene import list_scenes, get_scene
 
 mi.set_log_level(mi.LogLevel.Error)   # 只显示 Error，不显示 Warn
 
-print("Mitsuba variant:", mi.variant())
 
-# from Engine_V3 import Engine  # not used in this generator
+# ============================================================
+# 2) Logger helpers
+# ============================================================
+def setup_logger():
+    log_dir = Path("./logs")
+    log_dir.mkdir(parents=True, exist_ok=True)
+
+    log_file = log_dir / f"route_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+
+    logger = logging.getLogger("route_gen")
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
+
+    # 防止重复运行时重复添加 handler
+    if logger.handlers:
+        logger.handlers.clear()
+
+    formatter = logging.Formatter(
+        fmt="%(asctime)s | %(levelname)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+
+    file_handler = logging.FileHandler(log_file, encoding="utf-8")
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(formatter)
+
+    stream_handler = logging.StreamHandler()
+    stream_handler.setLevel(logging.INFO)
+    stream_handler.setFormatter(formatter)
+
+    logger.addHandler(file_handler)
+    # logger.addHandler(stream_handler)
+
+    logger.info("Logger initialized")
+    logger.info(f"Log file: {log_file}")
+
+    return logger, log_file
+
+
+def log_dict(logger, title, d):
+    logger.info(title)
+    for k, v in d.items():
+        logger.info(f"{k:20s}: {v}")
+    logger.info("=" * 40)
 
 
 # ============================================================
-# 2) Config helpers
+# 3) Config helpers
 # ============================================================
 def normalize_config(obj):
     """Recursively normalize YAML:
@@ -100,13 +131,15 @@ def load_cfg(cfg_path="config.yaml"):
 
 
 # ============================================================
-# 3) Geometry helpers
+# 4) Geometry helpers
 # ============================================================
 def wrap_yaw(a):
     return (a + np.pi) % (2 * np.pi) - np.pi
 
+
 def wrap_pitch(a):
-    return (a + np.pi/2) % np.pi - np.pi/2
+    return (a + np.pi / 2) % np.pi - np.pi / 2
+
 
 def is_point_in_region(region_vertices_3d, point_3d):
     """region: (N,3), point: (3,) -> bool in XY polygon."""
@@ -118,7 +151,7 @@ def is_point_in_region(region_vertices_3d, point_3d):
 
 
 # ============================================================
-# 4) Mitsuba inside-building test
+# 5) Mitsuba inside-building test
 # ============================================================
 def is_inside_building_mitsuba(scene, point, direction=np.array([0.37, 0.23, 0.90]), max_hits=50):
     """
@@ -149,7 +182,7 @@ def is_inside_building_mitsuba(scene, point, direction=np.array([0.37, 0.23, 0.9
 def ue_inside_building(scene, cfg, position, rotation, check_center_first=True):
     """
     position: (3,) or (n,3)
-    rotation: (3,) or (n,3)  radians, order [yaw, pitch, roll] for "zyx"
+    rotation: (3,) or (n,3) radians, order [yaw, pitch, roll] for "zyx"
     cfg["ue"]["rx_loc_pos"]: (n_rx,3) UE-local RX offsets
     """
     rx_offset = np.asarray(cfg["ue"]["rx_loc_pos"], dtype=np.float32)
@@ -172,7 +205,7 @@ def ue_inside_building(scene, cfg, position, rotation, check_center_first=True):
 
 
 # ============================================================
-# 5) UE state init + route generation
+# 6) UE state init + route generation
 # ============================================================
 def make_action_space(cfg):
     rand_seed = int(cfg["motion"]["rand_seed"])
@@ -193,7 +226,6 @@ def make_action_space(cfg):
 
 def initialize_ue_state(scene, cfg, region, z=1.0, max_tries=200):
     region = np.asarray(region, dtype=np.float32)
-    R_speed_level = float(cfg["motion"]["R_speed_level"])
 
     for _ in range(max_tries):
         x = np.random.uniform(region[:, 0].min(), region[:, 0].max())
@@ -212,7 +244,10 @@ def initialize_ue_state(scene, cfg, region, z=1.0, max_tries=200):
         pitch_spin0 = np.random.uniform(-np.pi / 2, np.pi / 2)
         spin_rot0 = np.array([yaw_spin0, pitch_spin0, 0.0], dtype=np.float32)
 
-        ue_rot0 = np.array([walk_rot0[0] + spin_rot0[0],spin_rot0[1], 0.0], dtype=np.float32)
+        ue_rot0 = np.array(
+            [wrap_yaw(walk_rot0[0] + spin_rot0[0]), spin_rot0[1], 0.0],
+            dtype=np.float32,
+        )
 
         if ue_inside_building(scene, cfg, p0, ue_rot0):
             continue
@@ -240,7 +275,6 @@ def generate_routes(scene, cfg, region, action_space):
     v_min = float(cfg["motion"]["min_speed"])
     R_speed_level = float(cfg["motion"]["R_speed_level"])
 
-    # Key: avoid infinite while loops
     max_attempts_per_step = int(cfg["motion"].get("max_attempts_per_step", 200))
 
     route_list = []
@@ -258,7 +292,10 @@ def generate_routes(scene, cfg, region, action_space):
         walk_rot_seq = []
         spin_rot_seq = []
 
-        ue_rot = np.array([walk_rot[0] + spin_rot[0], spin_rot[1], 0.0], dtype=np.float32)
+        ue_rot = np.array(
+            [wrap_yaw(walk_rot[0] + spin_rot[0]), spin_rot[1], 0.0],
+            dtype=np.float32,
+        )
         ue_rot_seq.append(ue_rot.tolist())
         walk_rot_seq.append(walk_rot.tolist())
         spin_rot_seq.append(spin_rot.tolist())
@@ -275,15 +312,22 @@ def generate_routes(scene, cfg, region, action_space):
                 walk_rot[0] = wrap_yaw(walk_rot[0] + dphi)
 
                 # 2) spin update
-                step_yaw = np.random.uniform(-R_speed_level * np.pi * dt * 2,
-                                             R_speed_level * np.pi * dt * 2)
-                step_pitch = np.random.uniform(-R_speed_level * np.pi * dt,
-                                               R_speed_level * np.pi * dt)
+                step_yaw = np.random.uniform(
+                    -R_speed_level * np.pi * dt * 2,
+                    R_speed_level * np.pi * dt * 2,
+                )
+                step_pitch = np.random.uniform(
+                    -R_speed_level * np.pi * dt,
+                    R_speed_level * np.pi * dt,
+                )
                 spin_rot[0] = wrap_yaw(spin_rot[0] + step_yaw)
                 spin_rot[1] = wrap_pitch(spin_rot[1] + step_pitch)
 
                 # 3) compose UE rotation
-                ue_rot = np.array([wrap_yaw(walk_rot[0] + spin_rot[0]), wrap_pitch(spin_rot[1]), 0.0], dtype=np.float32)
+                ue_rot = np.array(
+                    [wrap_yaw(walk_rot[0] + spin_rot[0]), wrap_pitch(spin_rot[1]), 0.0],
+                    dtype=np.float32,
+                )
 
                 # 4) propose move by walking yaw
                 temp_x = x + v * np.cos(walk_rot[0]) * dt
@@ -292,7 +336,6 @@ def generate_routes(scene, cfg, region, action_space):
 
                 # reject if outside or inside building
                 if (not is_point_in_region(region, test_point)) or ue_inside_building(scene, cfg, test_point, ue_rot):
-                    # mild nudge to escape local minima
                     walk_rot[0] = wrap_yaw(walk_rot[0] + np.random.choice([-1, 1]) * np.pi / 6)
                     continue
 
@@ -307,20 +350,21 @@ def generate_routes(scene, cfg, region, action_space):
                 break
 
             if not accepted:
-                # Too many rejects: turn around in place (direction opposite)
-                # Ensure CURRENT pose (x,y,z + new rotation) is also valid.
+                # Too many rejects: turn around in place
                 turned = False
-                for _ in range(12):  #最多尝试12次不同朝向
+                for _ in range(12):
                     walk_rot[0] = wrap_yaw(walk_rot[0] + np.pi)
-                    ue_rot_now = np.array([
-                        wrap_yaw(walk_rot[0] + spin_rot[0]),
-                        wrap_pitch(spin_rot[1]),
-                        0.0
-                    ], dtype=np.float32)
+                    ue_rot_now = np.array(
+                        [
+                            wrap_yaw(walk_rot[0] + spin_rot[0]),
+                            wrap_pitch(spin_rot[1]),
+                            0.0,
+                        ],
+                        dtype=np.float32,
+                    )
 
                     cur_point = np.array([x, y, z], dtype=np.float32)
                     if (not is_point_in_region(region, cur_point)) or ue_inside_building(scene, cfg, cur_point, ue_rot_now):
-                        # still invalid, add a small random yaw tweak and retry
                         jitter = float(cfg["motion"].get("turnaround_jitter_rad", 0.1))
                         walk_rot[0] = wrap_yaw(walk_rot[0] + np.random.uniform(-jitter, jitter))
                         continue
@@ -328,9 +372,8 @@ def generate_routes(scene, cfg, region, action_space):
                     turned = True
                     break
 
-                # if still not turned to a valid pose, just keep going; next proposals will be checked anyway
+                # if still invalid, just continue; next proposals will be checked anyway
                 continue
-
 
         route_list.append(route)
         rotation_list.append(ue_rot_seq)
@@ -341,59 +384,74 @@ def generate_routes(scene, cfg, region, action_space):
 
 
 # ============================================================
-# 6) Scene loader
+# 7) Scene loader
 # ============================================================
-def load_and_prepare_scene(cfg):
-    # =====================
-    # Load scene
-    # =====================
-    if cfg["scene"]["name"] != "free_space":
-        scene_path, map_data = get_scene('nyu_tandon')
-        for k, v in map_data.items():
-            print(f'{k}: {v}')
+def load_and_prepare_scene(cfg, logger):
+    map_data = None
 
-        scene = load_scene(scene_path,merge_shapes=True)
+    if cfg["scene"]["name"] != "free_space":
+        # 如果你想完全跟配置走，可以改成:
+        # scene_path, map_data = get_scene(cfg["scene"]["name"])
+        scene_path, map_data = get_scene("nyu_tandon")
+
+        logger.info("===== Scene map data =====")
+        for k, v in map_data.items():
+            logger.info(f"{k}: {v}")
+        logger.info("=" * 40)
+
+        scene = load_scene(scene_path, merge_shapes=True)
 
         floor = scene.get("ground")
         floor.radio_material = ITURadioMaterial(
             "itu_concrete", "concrete", thickness=0.01, color=(0.5, 0.5, 0.5)
         )
 
-        scene.remove("itu_wet_ground")
+        try:
+            scene.remove("itu_wet_ground")
+            logger.info("Removed object: itu_wet_ground")
+        except Exception:
+            logger.warning("Object 'itu_wet_ground' not found, skip remove.")
+
+        logger.info("===== Scene objects / materials =====")
         for name, obj in scene.objects.items():
-            print(f'{name:<15}{obj.radio_material.name}')
+            try:
+                logger.info(f"{name:<20} {obj.radio_material.name}")
+            except Exception:
+                logger.info(f"{name:<20} <no radio material>")
+        logger.info("=" * 40)
     else:
         scene = load_scene()
+        logger.info("Loaded free_space scene")
 
     return scene, map_data
 
 
 # ============================================================
-# 7) Main save loop
+# 8) Main save loop
 # ============================================================
 def main():
-    print("TF GPUs:", tf.config.list_physical_devices("GPU"))
+    logger, log_file = setup_logger()
+
+    gpus = tf.config.list_physical_devices("GPU")
+    if gpus:
+        logger.info("GPU available: %s", gpus)
+    else:
+        logger.info("No GPU, using CPU")
+    logger.info("TF GPUs: %s", gpus)
+    logger.info("Mitsuba variant: %s", mi.variant())
+    logger.info("CUDA_VISIBLE_DEVICES = %s", os.getenv("CUDA_VISIBLE_DEVICES"))
 
     cfg = load_cfg("config.yaml")
 
-    print("===== Route parameters =====")
-    for k, v in cfg["route"].items():
-        print(f"{k:20s}: {v}")
-    print("=============================\n")
+    log_dict(logger, "===== Route parameters =====", cfg["route"])
+    log_dict(logger, "===== Motion parameters =====", cfg["motion"])
 
-    print("===== Motion parameters =====")
-    for k, v in cfg["motion"].items():
-        print(f"{k:20s}: {v}")
-    print("=============================\n")
+    scene, map_data = load_and_prepare_scene(cfg, logger)
 
-
-    # Scene name optional in YAML, default nyu_tandon
-    # scene_name = cfg.get("scene", {}).get("name", "nyu_tandon")
-    scene, map_data = load_and_prepare_scene(cfg)
-
-    print("Scene map_data:")
-    for k, v in map_data.items():
-        print(f"  {k}: {v}")
+    if map_data is not None:
+        logger.info("Scene map_data:")
+        for k, v in map_data.items():
+            logger.info(f"  {k}: {v}")
 
     region = np.array(cfg["motion"]["region"], dtype=np.float32)
     action_space = make_action_space(cfg)
@@ -404,31 +462,68 @@ def main():
     n_routes = int(cfg["route"]["n_routes"])
     route_count = 0
 
+    stats = {"skip": 0, "success": 0, "fail": 0}
+    start_total = time.time()
+
+    logger.info("Output dir: %s", output_dir)
+    logger.info("n_routes: %d", n_routes)
+
     for i in tqdm(range(n_routes), desc="Generating routes"):
         file_path = output_dir / f"routes_{i:04d}.npz"
 
         if file_path.exists():
-            continue  # ⭐ 跳过已经生成的
-        r_list, rot_list, walk_list, spin_list = generate_routes(scene, cfg, region, action_space)
+            stats["skip"] += 1
+            logger.info(f"[SKIP] {file_path.name}")
+            continue
 
-        positions = np.asarray(r_list, dtype=np.float32)
-        rotations = np.asarray(rot_list, dtype=np.float32)
-        walk_rots = np.asarray(walk_list, dtype=np.float32)
-        spin_rots = np.asarray(spin_list, dtype=np.float32)
+        logger.info(f"[RUN ] {file_path.name}")
+        t0 = time.time()
 
-        file_path = output_dir / f"routes_{i:04d}.npz"
-        np.savez(
-            file_path,
-            positions=positions,
-            rotations=rotations,
-            walk_rotations=walk_rots,
-            spin_rotations=spin_rots,
-            n_ue=positions.shape[0],
-            n_step=positions.shape[1],
-        )
+        try:
+            r_list, rot_list, walk_list, spin_list = generate_routes(
+                scene, cfg, region, action_space
+            )
 
+            positions = np.asarray(r_list, dtype=np.float32)
+            rotations = np.asarray(rot_list, dtype=np.float32)
+            walk_rots = np.asarray(walk_list, dtype=np.float32)
+            spin_rots = np.asarray(spin_list, dtype=np.float32)
 
-    print(f"✅ Saved {route_count} routes to {output_dir}")
+            np.savez(
+                file_path,
+                positions=positions,
+                rotations=rotations,
+                walk_rotations=walk_rots,
+                spin_rotations=spin_rots,
+                n_ue=positions.shape[0],
+                n_step=positions.shape[1],
+            )
+
+            dt = time.time() - t0
+            stats["success"] += 1
+            route_count += 1
+
+            logger.info(
+                f"[OK  ] {file_path.name} | time={dt:.2f}s | "
+                f"positions.shape={positions.shape} | rotations.shape={rotations.shape}"
+            )
+
+        except KeyboardInterrupt:
+            logger.warning("KeyboardInterrupt received. Exiting safely.")
+            raise
+        except Exception:
+            stats["fail"] += 1
+            logger.exception(f"[FAIL] {file_path.name}")
+            continue
+
+    total_time = time.time() - start_total
+
+    logger.info("=" * 50)
+    logger.info(f"Done. Output dir: {output_dir}")
+    logger.info(f"Log file: {log_file}")
+    logger.info(f"Saved {route_count} new routes to {output_dir}")
+    logger.info(f"Total time: {total_time:.2f}s ({total_time/60.0:.2f} min)")
+    logger.info(f"Summary: {stats}")
 
 
 if __name__ == "__main__":
