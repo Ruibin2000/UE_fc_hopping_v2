@@ -76,7 +76,7 @@ def setup_logger(work_id):
     log_dir = Path("./logs")
     log_dir.mkdir(parents=True, exist_ok=True)
 
-    log_file = log_dir / f"CQ_{work_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+    log_file = log_dir / f"CQI_{work_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
     logger = logging.getLogger("RT_CQI")
     logger.setLevel(logging.INFO)
@@ -245,7 +245,7 @@ def main():
     # ---------------------
     # Load config
     # ---------------------
-    cfg = load_cfg("config.yaml")
+    cfg = load_cfg("config_arr8_s3_medium.yaml")
 
     log_dict(logger, "===== Route parameters =====", cfg["route"])
     log_dict(logger, "===== Motion parameters =====", cfg["motion"])

@@ -1,0 +1,176 @@
+experiment:
+  name: fc_hopping
+  seed: 42
+
+  CQI_dir: "../dataset/CQI_Mobility_high_R_2_region_3"
+scene:
+  # name: "free_space"
+  name: "nyu_tandon"
+
+route:
+
+  folder: "../dataset/route/route_Mobility_high_R_2_region_3"
+  n_routes: 1000
+
+channel:
+  NF_dB: 7.0
+  N0_dBm_per_Hz: -174
+  measure_time: 0.05  # in seconds
+  rho_max: 4.8
+  alpha: 0.6
+  rand_seed: 20250920
+
+  case: "SISO"
+
+# ##############################################
+# # low mobility
+# ##############################################
+# motion:
+#   measure_period: 0.05  # in seconds
+#   measure_time: 60.0  # in seconds
+#   max_speed: 2.0
+#   min_speed: 0.0
+#   dv_min: -1.0
+#   dv_max: 1.0
+#   dphi_min: -45.0
+#   dphi_max: 45.0
+
+#   v_intial: 1.0
+#   R_speed_level: 1
+
+#   rand_seed: 42
+
+# ###############################################
+# # medium mobility
+# ###############################################
+# motion:
+#   measure_period: 0.05  # in seconds
+#   measure_time: 60.0  # in seconds
+#   max_speed: 5.0
+#   min_speed: 0.0
+#   dv_min: -2.0
+#   dv_max: 2.0
+#   dphi_min: -30.0
+#   dphi_max: 30.0
+
+#   v_intial: 2.0
+#   R_speed_level: 1.0
+
+#   rand_seed: 42
+
+
+# ###############################################
+# # medium mobility_R_speed_level_2
+# ###############################################
+# motion:
+#   measure_period: 0.05  # in seconds
+#   measure_time: 60.0  # in seconds
+#   max_speed: 5.0
+#   min_speed: 0.0
+#   dv_min: -2.0
+#   dv_max: 2.0
+#   dphi_min: -30.0
+#   dphi_max: 30.0
+
+#   v_intial: 2.0
+#   R_speed_level: 2.0
+
+#   rand_seed: 42
+
+
+
+
+###############################################
+# high mobility
+###############################################
+motion:
+  measure_period: 0.05  # in seconds
+  measure_time: 60.0  # in seconds
+  max_speed: 10.0
+  min_speed: 0.0
+  dv_min: -5.0
+  dv_max: 5.0
+  dphi_min: -20.0
+  dphi_max: 20.0
+
+  v_intial: 3.0
+  R_speed_level: 2
+
+  rand_seed: 42
+
+  # region 1
+  # region: [[-467.028, 105.999, 1], [-339.867, 105.999, 1], [-467.028, -170.559, 1], [-339.867, -170.559, 1]]
+
+  # region 2
+  # region: [[-286.686, 146.815, 1], [-286.686, 301.179, 1], [-108.376,146.815, 1], [-108.376, 301.179, 1]]
+
+  # region 3
+  region: [[-245.790, 324.933, 1], [-245.790, 498.333, 1], [-639.418, 498.333, 1], [-639.418, 324.933, 1]]
+
+
+
+  collision_margin: 0.3
+
+
+tx:
+  n_tx: 2
+  array_size: [1, 1]
+  vertical_spacing: 0.5
+  horizontal_spacing: 0.5
+
+  pos: [[-256.242, 2.581, 10],[94.799, 187.907,10.0]]
+  look_at_pos : [[-262.514, 129.749,1.0],[-54.547, 184.787,1.0]]
+
+
+  pattern: "tr38901"
+  polarization: "V"
+  display_radius: 20
+
+  power_dbm: [51, 51]
+
+
+
+ue:
+  n_ue: 1
+  initial_pos: [[0,0.0,0.0], [0.0,0,0.0]] # Initial position of the UE
+  # initial_orientation: [[0.0,0.0], [0.0,0.0]] # Initial orientation of the UE (yaw, pitch)
+  initial_orientation_deg: [[0.0,0.0], [0.0,0.0]]
+  # initial_speed: [1.0, 1.0]  # Initial speed of the UE in m/s
+
+  
+  add_body: True  # Whether to add a body model to the UE
+  body_model: "UE2.ply"
+  body_material: "metal"
+  scaling: [1, 1]  # Scaling factor for the UE model
+
+
+
+  n_rx: 4
+  rx_id: [0, 1, 2, 3]
+  rx_array_size: [1, 1]
+  vertical_spacing: 0.5
+  horizontal_spacing: 0.5
+
+  # rx_loc: ["top_left","bottom_right", "center_right", "center_left"]
+  rx_loc_pos: [[-0.036,0.076,0], [0.036,-0.076,0], [0.036,0,0], [-0.036,0,0]] # Relative position of the RXs to the UE center (top_left, bottom_right, center_right, center_left)
+  # rx_loc_orientation: [[2.35619449019, 0, 0],[-0.78539816339, 0, 0],[0,0,0],[0,0,0]] # Initial orientation of the RXs (yaw, pitch, roll)
+  rx_loc_orientation_deg: [[135, 0, 0],[-45, 0, 0],[0,0,0],[0,0,0]] # Initial orientation of the RXs (yaw, pitch, roll) in degrees
+  rx_pattern: ["patch", "patch", "dipole", "dipole"]
+  polarization: "V"
+  # rx_pattern: ["tr38901", "tr38901", "tr38901", "tr38901"]
+  rx_display_radius: [1, 1, 1, 1]
+
+
+  rx_fc: [15.0e9, 15.0e9, 3.5e9, 3.5e9]
+  rx_bw: [200.0e6, 200.0e6, 100.0e6, 100.0e6]
+
+rt:
+  cir_out_type: "numpy"
+  max_depth: 5
+  los: True
+  specular_reflection: True
+  diffraction: False
+  edge_diffraction: False
+  refraction: True
+  diffuse_reflection: True
+

@@ -26,13 +26,20 @@ dataset/CQI_Mobility_low_region_1
 dataset/route/
 dataset/
 
-benchmark/benchmark_epsilon_greedy/epsilon_per_route/plots
-benchmark/benchmark_epsilon_greedy/epsilon_per_route/epsilon_greedy_single_ue
-benchmark/benchmark_epsilon_greedy/temp
-benchmark/benchmark_bandit/temp
+# benchmark/benchmark_epsilon_greedy/epsilon_per_route/plots
+# benchmark/benchmark_epsilon_greedy/epsilon_per_route/epsilon_greedy_single_ue
+# benchmark/
+benchmark/
+
+RT_v3/experiments*
+
+PPO/checkpoints*
+PPO/penalty/
+
 
 # =========================
 # Logs
 # =========================
 logs/
-*.log
+*.logPPO/penalty/
+PPO/penalty/calibration_out/stats.npz

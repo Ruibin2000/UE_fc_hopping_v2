@@ -441,7 +441,7 @@ def main():
     logger.info("Mitsuba variant: %s", mi.variant())
     logger.info("CUDA_VISIBLE_DEVICES = %s", os.getenv("CUDA_VISIBLE_DEVICES"))
 
-    cfg = load_cfg("config.yaml")
+    cfg = load_cfg("config_arr8_s3_medium.yaml")
 
     log_dict(logger, "===== Route parameters =====", cfg["route"])
     log_dict(logger, "===== Motion parameters =====", cfg["motion"])
