@@ -19,65 +19,127 @@ from torch.distributions import Categorical
 from tqdm import tqdm
 from torch.utils.tensorboard import SummaryWriter
 
+
 # ============================================================
 # Config
 # ============================================================
+
+EXP_idx = 5
+
+EXP_params = [
+    {
+        "group_id": "G0_base",
+        "actor_lr": 9e-5,
+        "critic_lr": 9e-5,
+        "value_coef": 2e-3,
+        "entropy_coef": 2e-3,
+        "lambda1": 0.0,
+        "lambda2": 600.0,
+    },
+    {
+        "group_id": "G1_lowCritic",
+        "actor_lr": 9e-5,
+        "critic_lr": 5e-5,
+        "value_coef": 2e-3,
+        "entropy_coef": 2e-3,
+        "lambda1": 0.0,
+        "lambda2": 600.0,
+    },
+    {
+        "group_id": "G2_veryLowCritic",
+        "actor_lr": 9e-5,
+        "critic_lr": 2e-5,
+        "value_coef": 1e-3,
+        "entropy_coef": 2e-3,
+        "lambda1": 0.0,
+        "lambda2": 600.0,
+    },
+    {
+        "group_id": "G3_highEntropy",
+        "actor_lr": 9e-5,
+        "critic_lr": 5e-5,
+        "value_coef": 2e-3,
+        "entropy_coef": 5e-3,
+        "lambda1": 0.0,
+        "lambda2": 600.0,
+    },
+    {
+        "group_id": "G4_L1_mid",
+        "actor_lr": 9e-5,
+        "critic_lr": 5e-5,
+        "value_coef": 2e-3,
+        "entropy_coef": 2e-3,
+        "lambda1": 0.3,
+        "lambda2": 600.0,
+    },
+    {
+        "group_id": "G5_L2_low",
+        "actor_lr": 9e-5,
+        "critic_lr": 5e-5,
+        "value_coef": 2e-3,
+        "entropy_coef": 2e-3,
+        "lambda1": 0.4,
+        "lambda2": 200.0,
+    },
+]
 
 @dataclass
 class Config:
     seed: int = 42
 
-    # dataset
     dataset_dir: str = "../dataset/CQI_arr8_medium_R_2_region_3"
+    output_dir: str = "./checkpoints_v5_coef_sweep"
 
-    # output
-    output_dir: str = "./checkpoints_v2"
-
-    # split
     train_ratio: float = 0.8
     val_ratio: float = 0.1
     test_ratio: float = 0.1
 
-    # train sampling
     num_envs: int = 16
     burn_in: int = 64
     train_horizon: int = 256
 
-    # PPO
     total_updates: int = 2000
     update_epochs: int = 4
     minibatch_size: int = 8
     clip_eps: float = 0.2
     gamma: float = 0.99
     gae_lambda: float = 0.95
-    lr: float = 1e-4
     max_grad_norm: float = 0.5
-    entropy_coef: float = 0.01
-    value_coef: float = 0.25
 
     # model
-    encoder_hidden_dim: int = 128
-    gru_hidden_dim: int = 128
+    actor_hidden_dim: int = 128
+    actor_gru_hidden_dim: int = 128
+    critic_hidden_dim: int = 128
+    critic_gru_hidden_dim: int = 128
 
-    # risk dynamics
+    reward_mode: str = "risk_log1p"
+
+    # ========= 从 list 取 =========
+    group_id: str = EXP_params[EXP_idx]["group_id"]
+
+    actor_lr: float = EXP_params[EXP_idx]["actor_lr"]
+    critic_lr: float = EXP_params[EXP_idx]["critic_lr"]
+
+    value_coef: float = EXP_params[EXP_idx]["value_coef"]
+    entropy_coef: float = EXP_params[EXP_idx]["entropy_coef"]
+
+    lambda1: float = EXP_params[EXP_idx]["lambda1"]
+    lambda2: float = EXP_params[EXP_idx]["lambda2"]
+    # =================================
+
     alpha_risk: float = 0.1
-    epsilon_budget: float = 0.3   # threshold b = 1 + epsilon_budget
+    epsilon_budget: float = 0.3
 
-    # reward
-    reward_mode: str = "risk_aware"      # "rate" or "risk_aware"
-    lambda1: float = 1.0
-    lambda2: float = 300.0
+    device: str = f"cuda:{EXP_idx % 2}" if torch.cuda.is_available() else "cpu"
 
-    # logging / eval
     log_every: int = 20
     validate_every: int = 50
-    save_every: int = 200
-    n_val_routes: Optional[int] = 20
+    save_every: int = 500
+    n_val_routes: Optional[int] = 50
     n_test_routes: Optional[int] = None
 
-    # device
-    device: str = "cuda" if torch.cuda.is_available() else "cpu"
 
+cfg = Config()
 
 cfg = Config()
 
@@ -97,13 +159,13 @@ def ensure_dir(path: Path) -> None:
     path.mkdir(parents=True, exist_ok=True)
 
 
-def setup_logger(output_dir: Path) -> logging.Logger:
+def setup_logger(output_dir: Path, logger_name: str) -> logging.Logger:
     ensure_dir(output_dir)
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     log_path = output_dir / f"train_{timestamp}.log"
 
-    logger = logging.getLogger("recurrent_ppo_risk")
+    logger = logging.getLogger(logger_name)
     logger.setLevel(logging.INFO)
     logger.propagate = False
 
@@ -124,7 +186,7 @@ def setup_logger(output_dir: Path) -> logging.Logger:
     sh.setFormatter(formatter)
 
     logger.addHandler(fh)
-    # logger.addHandler(sh)
+    logger.addHandler(sh)
 
     logger.info(f"Log file: {log_path}")
     return logger
@@ -153,8 +215,7 @@ def build_action_mask_from_z(
     return: [B, A], 1 valid / 0 invalid
     """
     B = len(z)
-    A = len(action_sizes)
-    mask = np.ones((B, A), dtype=np.float32)
+    mask = np.ones((B, len(action_sizes)), dtype=np.float32)
     restricted = z >= threshold_b
     if restricted.any():
         single_only = (action_sizes == 1).astype(np.float32)
@@ -165,6 +226,17 @@ def build_action_mask_from_z(
 def masked_categorical_from_logits(logits: torch.Tensor, mask: torch.Tensor) -> Categorical:
     masked_logits = logits.masked_fill(mask <= 0.0, -1e9)
     return Categorical(logits=masked_logits)
+
+
+def build_obs_input(
+    obs_values: np.ndarray,
+    obs_mask: np.ndarray,
+    z: np.ndarray,
+) -> np.ndarray:
+    return np.concatenate(
+        [obs_values, obs_mask, z[:, None].astype(np.float32)],
+        axis=1,
+    ).astype(np.float32)
 
 
 # ============================================================
@@ -223,14 +295,10 @@ def split_route_files(
     if n_train <= 0 or n_val <= 0 or n_test <= 0:
         raise ValueError("Split produced an empty subset. Adjust ratios or dataset size.")
 
-    train_files = files[:n_train]
-    val_files = files[n_train:n_train + n_val]
-    test_files = files[n_train + n_val:]
-
     return {
-        "train": train_files,
-        "val": val_files,
-        "test": test_files,
+        "train": files[:n_train],
+        "val": files[n_train:n_train + n_val],
+        "test": files[n_train + n_val:],
     }
 
 
@@ -356,7 +424,7 @@ class SegmentBatchEnv:
             rid = self.route_id[i]
             t = int(self.start[i] + self.local_t[i])
 
-            route = self.routes[rid]          # [T, N_cell, N_arr]
+            route = self.routes[rid]
             rates_t = route[t]                # [N_cell, N_arr]
             global_best_rate[i] = float(rates_t.max())
 
@@ -382,6 +450,11 @@ class SegmentBatchEnv:
                     chosen_rate[i] / (self.lambda2 + chosen_rate[i] + 1e-8)
                 )
                 rewards[i] = chosen_rate[i] * math.exp(-penalty)
+            elif self.reward_mode == "risk_log1p":
+                penalty = self.lambda1 * (self.z[i] - 1.0) * (
+                    chosen_rate[i] / (self.lambda2 + chosen_rate[i] + 1e-8)
+                )
+                rewards[i] = math.log1p(chosen_rate[i]) * math.exp(-penalty)
             else:
                 raise ValueError(f"Unknown reward_mode: {self.reward_mode}")
 
@@ -394,7 +467,7 @@ class SegmentBatchEnv:
         info = {
             "chosen_rate": chosen_rate,
             "global_best_rate": global_best_rate,
-            "z": self.z.copy(),
+            "z": self.z.copy(),   # post-step z
             "action_size": action_size,
             "restricted": restricted,
             "done": self.done.copy().astype(np.float32),
@@ -403,7 +476,7 @@ class SegmentBatchEnv:
 
 
 # ============================================================
-# Evaluation on full route
+# Evaluation on full route (sampled, no greedy)
 # ============================================================
 
 class FullRouteEvaluator:
@@ -430,7 +503,7 @@ class FullRouteEvaluator:
     @torch.no_grad()
     def evaluate(
         self,
-        model: "RecurrentActorCritic",
+        model: "SeparateRecurrentActorCritic",
         device: torch.device,
         action_sizes: np.ndarray,
         max_routes: Optional[int] = None,
@@ -445,12 +518,10 @@ class FullRouteEvaluator:
         total_pair_ratio = []
         total_restricted_ratio = []
         total_z_mean = []
-        
-        
 
-        for route in tqdm(eval_routes, desc="Val", leave=False):
+        for route in tqdm(eval_routes, desc="Val-Sampled", leave=False):
             z = 1.0
-            h = model.init_hidden(batch_size=1, device=device)
+            h_actor, h_critic = model.init_hidden(batch_size=1, device=device)
 
             prev_obs_values = np.zeros((1, self.n_cell * self.n_arr), dtype=np.float32)
             prev_obs_mask = np.zeros((1, self.n_cell * self.n_arr), dtype=np.float32)
@@ -463,10 +534,14 @@ class FullRouteEvaluator:
             z_trace = []
 
             for t in range(self.T):
-                obs_t = build_obs_input(prev_obs_values, prev_obs_mask, np.asarray([z], dtype=np.float32))
+                obs_t = build_obs_input(
+                    prev_obs_values,
+                    prev_obs_mask,
+                    np.asarray([z], dtype=np.float32),
+                )
                 obs_tensor = torch.from_numpy(obs_t).to(device)
 
-                logits, _, h = model.forward_step(obs_tensor, h)
+                logits, _, h_actor, h_critic = model.forward_step(obs_tensor, h_actor, h_critic)
 
                 mask_np = build_action_mask_from_z(
                     np.asarray([z], dtype=np.float32),
@@ -476,11 +551,10 @@ class FullRouteEvaluator:
                 mask_t = torch.from_numpy(mask_np).to(device)
 
                 dist = masked_categorical_from_logits(logits, mask_t)
-                # action_idx = int(torch.argmax(dist.probs, dim=-1).item())  # greedy
                 action_idx = int(dist.sample().item())
 
                 a_tuple = self.action_list[action_idx]
-                rates_t = route[t]   # [N_cell, N_arr]
+                rates_t = route[t]
                 global_best = float(rates_t.max())
 
                 obs_values = np.zeros((1, self.n_cell * self.n_arr), dtype=np.float32)
@@ -495,15 +569,22 @@ class FullRouteEvaluator:
                         obs_mask[0, flat_idx] = 1.0
                         observed_vals.append(v)
 
-                chosen = float(max(observed_vals))
+                chosen = float(max(observed_vals)) if len(observed_vals) > 0 else 0.0
 
                 if self.reward_mode == "rate":
                     reward = chosen
-                else:
+                elif self.reward_mode == "risk_aware":
                     penalty = self.lambda1 * (z - 1.0) * (
                         chosen / (self.lambda2 + chosen + 1e-8)
                     )
                     reward = chosen * math.exp(-penalty)
+                elif self.reward_mode == "risk_log1p":
+                    penalty = self.lambda1 * (z - 1.0) * (
+                        chosen / (self.lambda2 + chosen + 1e-8)
+                    )
+                    reward = math.log1p(chosen) * math.exp(-penalty)
+                else:
+                    raise ValueError(f"Unknown reward_mode: {self.reward_mode}")
 
                 rewards.append(reward)
                 chosen_rates.append(chosen)
@@ -522,10 +603,11 @@ class FullRouteEvaluator:
             pair_flags = np.asarray(pair_flags, dtype=np.float32)
             restricted_flags = np.asarray(restricted_flags, dtype=np.float32)
             z_trace = np.asarray(z_trace, dtype=np.float32)
+
             avg_chosen_rate = float(chosen_rates.mean())
             avg_best_rate = float(global_best_rates.mean())
-
             hit = float(np.mean(np.isclose(chosen_rates, global_best_rates, atol=1e-6)))
+
             total_return.append(float(rewards.sum()))
             total_avg_reward.append(float(rewards.mean()))
             total_avg_chosen_rate.append(avg_chosen_rate)
@@ -553,56 +635,103 @@ class FullRouteEvaluator:
             "restricted_ratio": float(np.mean(total_restricted_ratio)),
         }
 
+
 # ============================================================
-# Model
+# Model: separate actor / critic
 # ============================================================
 
-class RecurrentActorCritic(nn.Module):
+class SeparateRecurrentActorCritic(nn.Module):
     def __init__(
         self,
         obs_dim: int,
-        hidden_dim: int,
-        gru_hidden_dim: int,
+        actor_hidden_dim: int,
+        actor_gru_hidden_dim: int,
+        critic_hidden_dim: int,
+        critic_gru_hidden_dim: int,
         num_actions: int,
     ):
         super().__init__()
-        self.encoder = nn.Sequential(
-            nn.Linear(obs_dim, hidden_dim),
+
+        # actor
+        self.actor_encoder = nn.Sequential(
+            nn.Linear(obs_dim, actor_hidden_dim),
             nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
+            nn.Linear(actor_hidden_dim, actor_hidden_dim),
             nn.ReLU(),
         )
-        self.gru = nn.GRU(
-            input_size=hidden_dim,
-            hidden_size=gru_hidden_dim,
+        self.actor_gru = nn.GRU(
+            input_size=actor_hidden_dim,
+            hidden_size=actor_gru_hidden_dim,
             num_layers=1,
             batch_first=True,
         )
-        self.policy_head = nn.Linear(gru_hidden_dim, num_actions)
-        self.value_head = nn.Linear(gru_hidden_dim, 1)
-        self.gru_hidden_dim = gru_hidden_dim
+        self.policy_head = nn.Linear(actor_gru_hidden_dim, num_actions)
 
-    def init_hidden(self, batch_size: int, device: torch.device) -> torch.Tensor:
-        return torch.zeros(1, batch_size, self.gru_hidden_dim, device=device)
+        # critic
+        self.critic_encoder = nn.Sequential(
+            nn.Linear(obs_dim, critic_hidden_dim),
+            nn.ReLU(),
+            nn.Linear(critic_hidden_dim, critic_hidden_dim),
+            nn.ReLU(),
+        )
+        self.critic_gru = nn.GRU(
+            input_size=critic_hidden_dim,
+            hidden_size=critic_gru_hidden_dim,
+            num_layers=1,
+            batch_first=True,
+        )
+        self.value_head = nn.Linear(critic_gru_hidden_dim, 1)
+
+        self.actor_gru_hidden_dim = actor_gru_hidden_dim
+        self.critic_gru_hidden_dim = critic_gru_hidden_dim
+
+    def init_hidden(self, batch_size: int, device: torch.device) -> Tuple[torch.Tensor, torch.Tensor]:
+        h_actor = torch.zeros(1, batch_size, self.actor_gru_hidden_dim, device=device)
+        h_critic = torch.zeros(1, batch_size, self.critic_gru_hidden_dim, device=device)
+        return h_actor, h_critic
 
     def forward(
         self,
-        obs_seq: torch.Tensor,   # [B, T, D]
-        h0: torch.Tensor,        # [1, B, H]
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        x = self.encoder(obs_seq)
-        out, hN = self.gru(x, h0)
-        logits = self.policy_head(out)                 # [B, T, A]
-        values = self.value_head(out).squeeze(-1)      # [B, T]
-        return logits, values, hN
+        obs_seq: torch.Tensor,         # [B, T, D]
+        h_actor0: torch.Tensor,        # [1, B, H_a]
+        h_critic0: torch.Tensor,       # [1, B, H_c]
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        a = self.actor_encoder(obs_seq)
+        a_out, h_actorN = self.actor_gru(a, h_actor0)
+        logits = self.policy_head(a_out)
+
+        c = self.critic_encoder(obs_seq)
+        c_out, h_criticN = self.critic_gru(c, h_critic0)
+        values = self.value_head(c_out).squeeze(-1)
+
+        return logits, values, h_actorN, h_criticN
 
     def forward_step(
         self,
-        obs_t: torch.Tensor,     # [B, D]
-        h: torch.Tensor,         # [1, B, H]
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        logits, values, hN = self.forward(obs_t.unsqueeze(1), h)
-        return logits[:, 0], values[:, 0], hN
+        obs_t: torch.Tensor,           # [B, D]
+        h_actor: torch.Tensor,         # [1, B, H_a]
+        h_critic: torch.Tensor,        # [1, B, H_c]
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+        logits, values, h_actorN, h_criticN = self.forward(
+            obs_t.unsqueeze(1),
+            h_actor,
+            h_critic,
+        )
+        return logits[:, 0], values[:, 0], h_actorN, h_criticN
+
+    def actor_parameters(self):
+        return itertools.chain(
+            self.actor_encoder.parameters(),
+            self.actor_gru.parameters(),
+            self.policy_head.parameters(),
+        )
+
+    def critic_parameters(self):
+        return itertools.chain(
+            self.critic_encoder.parameters(),
+            self.critic_gru.parameters(),
+            self.value_head.parameters(),
+        )
 
 
 # ============================================================
@@ -610,27 +739,40 @@ class RecurrentActorCritic(nn.Module):
 # ============================================================
 
 class RolloutBuffer:
-    def __init__(self, num_envs: int, horizon: int, obs_dim: int, hidden_dim: int):
+    def __init__(
+        self,
+        num_envs: int,
+        horizon: int,
+        obs_dim: int,
+        actor_hidden_dim: int,
+        critic_hidden_dim: int,
+    ):
         self.num_envs = num_envs
         self.horizon = horizon
         self.obs_dim = obs_dim
-        self.hidden_dim = hidden_dim
+        self.actor_hidden_dim = actor_hidden_dim
+        self.critic_hidden_dim = critic_hidden_dim
         self.reset()
 
     def reset(self) -> None:
-        B, H, D, G = self.num_envs, self.horizon, self.obs_dim, self.hidden_dim
+        B, H, D = self.num_envs, self.horizon, self.obs_dim
+        Ha = self.actor_hidden_dim
+        Hc = self.critic_hidden_dim
+
         self.obs = np.zeros((B, H, D), dtype=np.float32)
         self.actions = np.zeros((B, H), dtype=np.int64)
         self.old_logp = np.zeros((B, H), dtype=np.float32)
         self.rewards = np.zeros((B, H), dtype=np.float32)
         self.values = np.zeros((B, H), dtype=np.float32)
         self.dones = np.zeros((B, H), dtype=np.float32)
-        self.z = np.zeros((B, H), dtype=np.float32)
+        self.z = np.zeros((B, H), dtype=np.float32)  # z BEFORE action
         self.action_sizes = np.zeros((B, H), dtype=np.int64)
         self.chosen_rates = np.zeros((B, H), dtype=np.float32)
         self.global_best_rates = np.zeros((B, H), dtype=np.float32)
         self.restricted = np.zeros((B, H), dtype=np.float32)
-        self.h0 = np.zeros((B, 1, G), dtype=np.float32)
+
+        self.actor_h0 = np.zeros((B, 1, Ha), dtype=np.float32)
+        self.critic_h0 = np.zeros((B, 1, Hc), dtype=np.float32)
 
         self.advantages = np.zeros((B, H), dtype=np.float32)
         self.returns = np.zeros((B, H), dtype=np.float32)
@@ -653,35 +795,24 @@ class RolloutBuffer:
 # Train helpers
 # ============================================================
 
-def build_obs_input(
-    obs_values: np.ndarray,  # [B, N_cell*N_arr]
-    obs_mask: np.ndarray,    # [B, N_cell*N_arr]
-    z: np.ndarray,           # [B]
-) -> np.ndarray:
-    return np.concatenate(
-        [obs_values, obs_mask, z[:, None].astype(np.float32)],
-        axis=1,
-    ).astype(np.float32)
-
-
 @torch.no_grad()
 def run_burn_in(
     env: SegmentBatchEnv,
-    model: RecurrentActorCritic,
+    model: SeparateRecurrentActorCritic,
     device: torch.device,
     action_sizes: np.ndarray,
-) -> Tuple[np.ndarray, np.ndarray, torch.Tensor]:
+) -> Tuple[np.ndarray, np.ndarray, torch.Tensor, torch.Tensor]:
     B = env.num_envs
     obs_values = np.zeros((B, env.n_cell * env.n_arr), dtype=np.float32)
     obs_mask = np.zeros((B, env.n_cell * env.n_arr), dtype=np.float32)
 
-    h = model.init_hidden(batch_size=B, device=device)
+    h_actor, h_critic = model.init_hidden(batch_size=B, device=device)
 
     for _ in range(env.burn_in):
         obs_input = build_obs_input(obs_values, obs_mask, env.z)
         obs_t = torch.from_numpy(obs_input).to(device)
 
-        logits, _, h = model.forward_step(obs_t, h)
+        logits, _, h_actor, h_critic = model.forward_step(obs_t, h_actor, h_critic)
 
         mask_np = env.get_action_mask(action_sizes)
         mask_t = torch.from_numpy(mask_np).to(device)
@@ -691,30 +822,40 @@ def run_burn_in(
 
         obs_values, obs_mask, _, _ = env.step(action_idx)
 
-    return obs_values, obs_mask, h
+    return obs_values, obs_mask, h_actor, h_critic
 
 
 @torch.no_grad()
 def collect_rollout(
     env: SegmentBatchEnv,
-    model: RecurrentActorCritic,
+    model: SeparateRecurrentActorCritic,
     device: torch.device,
     action_sizes: np.ndarray,
     cfg: Config,
 ) -> RolloutBuffer:
     env.reset_all()
-    obs_values, obs_mask, h = run_burn_in(env, model, device, action_sizes)
+    obs_values, obs_mask, h_actor, h_critic = run_burn_in(env, model, device, action_sizes)
 
     B = env.num_envs
     obs_dim = 2 * env.n_cell * env.n_arr + 1
-    buffer = RolloutBuffer(B, env.horizon, obs_dim, model.gru_hidden_dim)
-    buffer.h0[:, 0, :] = h[0].cpu().numpy()
+
+    buffer = RolloutBuffer(
+        num_envs=B,
+        horizon=env.horizon,
+        obs_dim=obs_dim,
+        actor_hidden_dim=model.actor_gru_hidden_dim,
+        critic_hidden_dim=model.critic_gru_hidden_dim,
+    )
+    buffer.actor_h0[:, 0, :] = h_actor[0].cpu().numpy()
+    buffer.critic_h0[:, 0, :] = h_critic[0].cpu().numpy()
 
     for t in range(env.horizon):
         obs_input = build_obs_input(obs_values, obs_mask, env.z)
         obs_t = torch.from_numpy(obs_input).to(device)
 
-        logits, values, h = model.forward_step(obs_t, h)
+        z_before = env.z.copy()
+
+        logits, values, h_actor, h_critic = model.forward_step(obs_t, h_actor, h_critic)
 
         mask_np = env.get_action_mask(action_sizes)
         mask_t = torch.from_numpy(mask_np).to(device)
@@ -735,7 +876,7 @@ def collect_rollout(
         buffer.rewards[:, t] = rewards
         buffer.values[:, t] = values_np
         buffer.dones[:, t] = info["done"]
-        buffer.z[:, t] = info["z"]
+        buffer.z[:, t] = z_before
         buffer.action_sizes[:, t] = info["action_size"]
         buffer.chosen_rates[:, t] = info["chosen_rate"]
         buffer.global_best_rates[:, t] = info["global_best_rate"]
@@ -746,7 +887,7 @@ def collect_rollout(
 
     obs_input = build_obs_input(obs_values, obs_mask, env.z)
     obs_t = torch.from_numpy(obs_input).to(device)
-    _, last_values_t, _ = model.forward_step(obs_t, h)
+    _, last_values_t, _, _ = model.forward_step(obs_t, h_actor, h_critic)
     last_values = last_values_t.cpu().numpy()
 
     buffer.compute_gae(last_values, gamma=cfg.gamma, gae_lambda=cfg.gae_lambda)
@@ -754,8 +895,9 @@ def collect_rollout(
 
 
 def ppo_update(
-    model: RecurrentActorCritic,
-    optimizer: optim.Optimizer,
+    model: SeparateRecurrentActorCritic,
+    actor_optimizer: optim.Optimizer,
+    critic_optimizer: optim.Optimizer,
     buffer: RolloutBuffer,
     device: torch.device,
     action_sizes: np.ndarray,
@@ -772,8 +914,13 @@ def ppo_update(
         "pi_loss": [],
         "v_loss": [],
         "entropy": [],
+        "actor_loss": [],
+        "critic_loss": [],
         "total_loss": [],
     }
+
+    actor_params = list(model.actor_parameters())
+    critic_params = list(model.critic_parameters())
 
     for _ in range(cfg.update_epochs):
         np.random.shuffle(all_idx)
@@ -783,20 +930,22 @@ def ppo_update(
             if len(mb_idx) == 0:
                 continue
 
-            obs = torch.from_numpy(buffer.obs[mb_idx]).to(device)                         # [Mb,H,D]
-            actions = torch.from_numpy(buffer.actions[mb_idx]).to(device)                 # [Mb,H]
-            old_logp = torch.from_numpy(buffer.old_logp[mb_idx]).to(device)               # [Mb,H]
-            returns = torch.from_numpy(buffer.returns[mb_idx]).to(device)                 # [Mb,H]
-            advantages = torch.from_numpy(adv[mb_idx]).to(device)                         # [Mb,H]
-            z = buffer.z[mb_idx]                                                          # [Mb,H]
-            h0 = torch.from_numpy(buffer.h0[mb_idx].transpose(1, 0, 2)).to(device)       # [1,Mb,G]
+            obs = torch.from_numpy(buffer.obs[mb_idx]).to(device)
+            actions = torch.from_numpy(buffer.actions[mb_idx]).to(device)
+            old_logp = torch.from_numpy(buffer.old_logp[mb_idx]).to(device)
+            returns = torch.from_numpy(buffer.returns[mb_idx]).to(device)
+            advantages = torch.from_numpy(adv[mb_idx]).to(device)
 
-            logits, values, _ = model(obs, h0)
+            z = buffer.z[mb_idx]
+            actor_h0 = torch.from_numpy(buffer.actor_h0[mb_idx].transpose(1, 0, 2)).to(device)
+            critic_h0 = torch.from_numpy(buffer.critic_h0[mb_idx].transpose(1, 0, 2)).to(device)
+
+            logits, values, _, _ = model(obs, actor_h0, critic_h0)
 
             mask_np = np.stack(
                 [build_action_mask_from_z(z[:, t], action_sizes, threshold_b) for t in range(H)],
                 axis=1,
-            )  # [Mb,H,A]
+            )
             mask = torch.from_numpy(mask_np).to(device)
 
             dist = masked_categorical_from_logits(logits, mask)
@@ -810,16 +959,25 @@ def ppo_update(
 
             v_loss = ((values - returns) ** 2).mean()
 
-            total_loss = pi_loss + cfg.value_coef * v_loss - cfg.entropy_coef * entropy
+            actor_loss = pi_loss - cfg.entropy_coef * entropy
+            critic_loss = cfg.value_coef * v_loss
+            total_loss = actor_loss + critic_loss
 
-            optimizer.zero_grad(set_to_none=True)
-            total_loss.backward()
-            nn.utils.clip_grad_norm_(model.parameters(), cfg.max_grad_norm)
-            optimizer.step()
+            actor_optimizer.zero_grad(set_to_none=True)
+            actor_loss.backward(retain_graph=False)
+            nn.utils.clip_grad_norm_(actor_params, cfg.max_grad_norm)
+            actor_optimizer.step()
+
+            critic_optimizer.zero_grad(set_to_none=True)
+            critic_loss.backward()
+            nn.utils.clip_grad_norm_(critic_params, cfg.max_grad_norm)
+            critic_optimizer.step()
 
             stats["pi_loss"].append(float(pi_loss.item()))
             stats["v_loss"].append(float(v_loss.item()))
             stats["entropy"].append(float(entropy.item()))
+            stats["actor_loss"].append(float(actor_loss.item()))
+            stats["critic_loss"].append(float(critic_loss.item()))
             stats["total_loss"].append(float(total_loss.item()))
 
     return {k: float(np.mean(v)) for k, v in stats.items()}
@@ -851,14 +1009,16 @@ def summarize_rollout(buffer: RolloutBuffer) -> Dict[str, float]:
 
 def save_checkpoint(
     path: Path,
-    model: RecurrentActorCritic,
-    optimizer: optim.Optimizer,
+    model: SeparateRecurrentActorCritic,
+    actor_optimizer: optim.Optimizer,
+    critic_optimizer: optim.Optimizer,
     cfg: Config,
     extra: Dict[str, float],
 ) -> None:
     payload = {
         "model_state_dict": model.state_dict(),
-        "optimizer_state_dict": optimizer.state_dict(),
+        "actor_optimizer_state_dict": actor_optimizer.state_dict(),
+        "critic_optimizer_state_dict": critic_optimizer.state_dict(),
         "config": asdict(cfg),
         "extra": extra,
     }
@@ -873,12 +1033,20 @@ def main() -> None:
     set_seed(cfg.seed)
 
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S")
-    exp_name = f"PPO_alpha_{cfg.alpha_risk}_eps_{cfg.epsilon_budget}_h{cfg.train_horizon}_lr_{cfg.lr}"
+    exp_name = (
+        f"PPO_{cfg.group_id}"
+        f"_{cfg.reward_mode}"
+        f"_alpha{cfg.alpha_risk}"
+        f"_eps{cfg.epsilon_budget}"
+        f"_lam1{cfg.lambda1}"
+        f"_lam2{cfg.lambda2}"
+        f"_alr{cfg.actor_lr}"
+        f"_clr{cfg.critic_lr}"
+    )
     output_dir = Path(cfg.output_dir) / f"{exp_name}_{run_id}"
     ensure_dir(output_dir)
 
-    logger = setup_logger(output_dir)
-    
+    logger = setup_logger(output_dir, logger_name=f"sep_ac_ppo_{cfg.group_id}")
     writer = SummaryWriter(log_dir=str(output_dir / "tb"))
 
     files = list_route_files(cfg.dataset_dir)
@@ -911,14 +1079,17 @@ def main() -> None:
     obs_dim = 2 * n_cell * n_arr + 1
     device = torch.device(cfg.device)
 
-    model = RecurrentActorCritic(
+    model = SeparateRecurrentActorCritic(
         obs_dim=obs_dim,
-        hidden_dim=cfg.encoder_hidden_dim,
-        gru_hidden_dim=cfg.gru_hidden_dim,
+        actor_hidden_dim=cfg.actor_hidden_dim,
+        actor_gru_hidden_dim=cfg.actor_gru_hidden_dim,
+        critic_hidden_dim=cfg.critic_hidden_dim,
+        critic_gru_hidden_dim=cfg.critic_gru_hidden_dim,
         num_actions=num_actions,
     ).to(device)
 
-    optimizer = optim.Adam(model.parameters(), lr=cfg.lr)
+    actor_optimizer = optim.Adam(model.actor_parameters(), lr=cfg.actor_lr)
+    critic_optimizer = optim.Adam(model.critic_parameters(), lr=cfg.critic_lr)
 
     train_env = SegmentBatchEnv(
         routes=train_routes,
@@ -955,24 +1126,26 @@ def main() -> None:
     )
 
     config_to_save = asdict(cfg).copy()
-    config_to_save["train_files"] = [str(p) for p in split["train"]]
-    config_to_save["val_files"] = [str(p) for p in split["val"]]
-    config_to_save["test_files"] = [str(p) for p in split["test"]]
-
-    with open(output_dir / "config.json", "w") as f:
-        json.dump(config_to_save, f, indent=2)
 
     logger.info("Config:")
-    logger.info(json.dumps(asdict(cfg), indent=2))
+    logger.info(json.dumps(config_to_save, indent=2))
 
-    best_val_return = -float("inf")
-    t0 = time.time()
-    
+    config_to_save["split_files"] = {
+        "train": [str(p) for p in split["train"]],
+        "val": [str(p) for p in split["val"]],
+        "test": [str(p) for p in split["test"]],
+    }
+
+    with open(output_dir / "config.json", "w", encoding="utf-8") as f:
+        json.dump(config_to_save, f, indent=2)
+
     best_val_ratio = -float("inf")
+    t0 = time.time()
 
     logger.info("Start training...")
     pbar = tqdm(range(1, cfg.total_updates + 1), desc="Training")
-    for update in pbar: 
+
+    for update in pbar:
         model.train()
 
         buffer = collect_rollout(
@@ -987,7 +1160,8 @@ def main() -> None:
 
         loss_stats = ppo_update(
             model=model,
-            optimizer=optimizer,
+            actor_optimizer=actor_optimizer,
+            critic_optimizer=critic_optimizer,
             buffer=buffer,
             device=device,
             action_sizes=action_sizes,
@@ -995,13 +1169,25 @@ def main() -> None:
             cfg=cfg,
         )
 
+        global_step = update * cfg.num_envs * cfg.train_horizon
+
+        pbar.set_postfix({
+            "rate": f"{train_stats['avg_chosen_rate']:.1f}",
+            "ratio": f"{train_stats['best_ratio']:.3f}",
+            "hit": f"{train_stats['best_hit_rate']:.3f}",
+            "pair": f"{train_stats['pair']:.2f}",
+            "z": f"{train_stats['z_mean']:.2f}",
+            "pi": f"{loss_stats['pi_loss']:.3f}",
+            "v": f"{loss_stats['v_loss']:.1e}",
+            "ent": f"{loss_stats['entropy']:.3f}",
+        })
+
         if update % cfg.log_every == 0 or update == 1:
             elapsed_min = (time.time() - t0) / 60.0
-            steps_seen = update * cfg.num_envs * cfg.train_horizon
 
             logger.info(
                 f"[Rollout {update}/{cfg.total_updates}] "
-                f"step={steps_seen} | "
+                f"step={global_step} | "
                 f"avg_ret={train_stats['avg_ret']:.4f} | "
                 f"avg_chosen_rate={train_stats['avg_chosen_rate']:.4f} | "
                 f"best_hit_rate={train_stats['best_hit_rate']:.4f} | "
@@ -1013,11 +1199,11 @@ def main() -> None:
                 f"pi_loss={loss_stats['pi_loss']:.4f} | "
                 f"v_loss={loss_stats['v_loss']:.4f} | "
                 f"entropy={loss_stats['entropy']:.4f} | "
+                f"actor_loss={loss_stats['actor_loss']:.4f} | "
+                f"critic_loss={loss_stats['critic_loss']:.4f} | "
                 f"total_loss={loss_stats['total_loss']:.4f} | "
                 f"elapsed={elapsed_min:.1f} min"
             )
-            
-            global_step = update * cfg.num_envs * cfg.train_horizon
 
             writer.add_scalar("train/avg_ret", train_stats["avg_ret"], global_step)
             writer.add_scalar("train/avg_chosen_rate", train_stats["avg_chosen_rate"], global_step)
@@ -1031,6 +1217,8 @@ def main() -> None:
             writer.add_scalar("loss/pi_loss", loss_stats["pi_loss"], global_step)
             writer.add_scalar("loss/v_loss", loss_stats["v_loss"], global_step)
             writer.add_scalar("loss/entropy", loss_stats["entropy"], global_step)
+            writer.add_scalar("loss/actor_loss", loss_stats["actor_loss"], global_step)
+            writer.add_scalar("loss/critic_loss", loss_stats["critic_loss"], global_step)
             writer.add_scalar("loss/total_loss", loss_stats["total_loss"], global_step)
 
         if update % cfg.validate_every == 0 or update == cfg.total_updates:
@@ -1041,8 +1229,9 @@ def main() -> None:
                 action_sizes=action_sizes,
                 max_routes=cfg.n_val_routes,
             )
+
             logger.info(
-                f"[VAL] routes={val_stats['num_routes']} | "
+                f"[VAL-SAMPLED] routes={val_stats['num_routes']} | "
                 f"avg_return={val_stats['mean_return']:.4f} | "
                 f"avg_reward_per_step={val_stats['mean_reward_per_step']:.4f} | "
                 f"avg_chosen_rate={val_stats['mean_chosen_rate']:.4f} | "
@@ -1053,30 +1242,34 @@ def main() -> None:
                 f"z_mean={val_stats['z_mean']:.3f} | "
                 f"restricted={val_stats['restricted_ratio']:.3f}"
             )
-            
-            writer.add_scalar("val/mean_return", val_stats["mean_return"], global_step)
-            writer.add_scalar("val/mean_reward_per_step", val_stats["mean_reward_per_step"], global_step)
-            writer.add_scalar("val/mean_chosen_rate", val_stats["mean_chosen_rate"], global_step)
-            writer.add_scalar("val/mean_best_rate", val_stats["mean_best_rate"], global_step)
-            writer.add_scalar("val/mean_hit_global_best_rate", val_stats["mean_hit_global_best_rate"], global_step)
-            writer.add_scalar("val/best_ratio", val_stats["best_ratio"], global_step)
-            writer.add_scalar("val/single_ratio", val_stats["single_ratio"], global_step)
-            writer.add_scalar("val/pair_ratio", val_stats["pair_ratio"], global_step)
-            writer.add_scalar("val/z_mean", val_stats["z_mean"], global_step)
-            writer.add_scalar("val/restricted_ratio", val_stats["restricted_ratio"], global_step)
+
+            writer.add_scalar("val_sampled/mean_return", val_stats["mean_return"], global_step)
+            writer.add_scalar("val_sampled/mean_reward_per_step", val_stats["mean_reward_per_step"], global_step)
+            writer.add_scalar("val_sampled/mean_chosen_rate", val_stats["mean_chosen_rate"], global_step)
+            writer.add_scalar("val_sampled/mean_best_rate", val_stats["mean_best_rate"], global_step)
+            writer.add_scalar("val_sampled/mean_hit_global_best_rate", val_stats["mean_hit_global_best_rate"], global_step)
+            writer.add_scalar("val_sampled/best_ratio", val_stats["best_ratio"], global_step)
+            writer.add_scalar("val_sampled/single_ratio", val_stats["single_ratio"], global_step)
+            writer.add_scalar("val_sampled/pair_ratio", val_stats["pair_ratio"], global_step)
+            writer.add_scalar("val_sampled/z_mean", val_stats["z_mean"], global_step)
+            writer.add_scalar("val_sampled/restricted_ratio", val_stats["restricted_ratio"], global_step)
 
             if val_stats["best_ratio"] > best_val_ratio:
                 best_val_ratio = val_stats["best_ratio"]
                 save_checkpoint(
                     output_dir / "best.pt",
                     model,
-                    optimizer,
+                    actor_optimizer,
+                    critic_optimizer,
                     cfg,
                     {
                         "best_val_ratio": best_val_ratio,
                         "update": update,
-                        "avg_chosen_rate": val_stats["mean_chosen_rate"],
-                        "avg_hit_global_best_rate": val_stats["mean_hit_global_best_rate"],
+                        "mean_chosen_rate": val_stats["mean_chosen_rate"],
+                        "mean_best_rate": val_stats["mean_best_rate"],
+                        "mean_hit_global_best_rate": val_stats["mean_hit_global_best_rate"],
+                        "pair_ratio": val_stats["pair_ratio"],
+                        "z_mean": val_stats["z_mean"],
                     },
                 )
                 logger.info(f"Saved new best checkpoint by best_ratio={best_val_ratio:.4f}\n")
@@ -1085,25 +1278,27 @@ def main() -> None:
             save_checkpoint(
                 output_dir / f"ckpt_update_{update}.pt",
                 model,
-                optimizer,
+                actor_optimizer,
+                critic_optimizer,
                 cfg,
                 {"update": update},
             )
-            logger.info(f"Saved checkpoint: ckpt_update_{update}.pt\n")
+            logger.info(f"Saved checkpoint: ckpt_update_{update}.pt")
 
     save_checkpoint(
         output_dir / "last.pt",
         model,
-        optimizer,
+        actor_optimizer,
+        critic_optimizer,
         cfg,
-        {"best_val_return": best_val_return, "update": cfg.total_updates},
+        {"best_val_ratio": best_val_ratio, "update": cfg.total_updates},
     )
 
     logger.info("Training done.")
 
     model.eval()
 
-    logger.info("=== TEST (last checkpoint) ===")
+    logger.info("=== TEST-SAMPLED (last checkpoint) ===")
     last_test_stats = test_eval.evaluate(
         model=model,
         device=device,
@@ -1116,8 +1311,10 @@ def main() -> None:
     if best_path.exists():
         payload = torch.load(best_path, map_location=device)
         model.load_state_dict(payload["model_state_dict"])
+        actor_optimizer.load_state_dict(payload["actor_optimizer_state_dict"])
+        critic_optimizer.load_state_dict(payload["critic_optimizer_state_dict"])
 
-        logger.info("=== TEST (best checkpoint) ===")
+        logger.info("=== TEST-SAMPLED (best checkpoint) ===")
         best_test_stats = test_eval.evaluate(
             model=model,
             device=device,
@@ -1125,7 +1322,7 @@ def main() -> None:
             max_routes=cfg.n_test_routes,
         )
         logger.info(json.dumps(best_test_stats, indent=2))
-        
+
     writer.close()
 
 

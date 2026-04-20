@@ -35,6 +35,9 @@ RT_v3/experiments*
 
 PPO/checkpoints*
 PPO/penalty/
+PPO/temp/
+
+Model_compare/wrong*
 
 
 # =========================

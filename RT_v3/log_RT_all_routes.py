@@ -10,12 +10,13 @@ from collections import defaultdict
 
 os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
 
-num_workers = 2
-work_id = 1
+num_workers = 4
+work_id = 3  
+
 
 # 只在没设置时才默认用 GPU 0；想强制 CPU：os.environ["CUDA_VISIBLE_DEVICES"] = ""
 if os.getenv("CUDA_VISIBLE_DEVICES") is None:
-    os.environ["CUDA_VISIBLE_DEVICES"] = f"{work_id}"
+    os.environ["CUDA_VISIBLE_DEVICES"] = f"{work_id % 2}"
 
 
 import tensorflow as tf
